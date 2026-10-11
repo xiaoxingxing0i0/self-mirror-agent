@@ -1,0 +1,114 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: self-mirror-agent
+
+  datasource:
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: jdbc:mysql://${MYSQL_HOST:localhost}:${MYSQL_PORT:3306}/self_mirror_agent?useUnicode=true&characterEncoding=UTF-8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true
+    username: ${MYSQL_USER:root}
+    password: ${MYSQL_PASSWORD:123456}
+    hikari:
+      maximum-pool-size: 16
+      minimum-idle: 4
+
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    baseline-on-migrate: true
+
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      database: 0
+      timeout: 3s
+      lettuce:
+        pool:
+          max-active: 16
+          max-idle: 8
+
+  quartz:
+    job-store-type: memory
+    properties:
+      org.quartz.threadPool.threadCount: 4
+
+  ai:
+    openai:
+      # 默认对接阿里云百炼（通义千问）OpenAI 兼容模式，可替换为任意兼容网关
+      api-key: ${AI_API_KEY:sk-replace-me}
+      base-url: ${AI_BASE_URL:https://dashscope.aliyuncs.com/compatible-mode}
+      chat:
+        options:
+          model: ${AI_CHAT_MODEL:qwen-plus}
+          temperature: 0.7
+      embedding:
+        options:
+          model: ${AI_EMBEDDING_MODEL:text-embedding-v3}
+
+  jackson:
+    default-property-inclusion: non_null
+    date-format: yyyy-MM-dd HH:mm:ss
+    time-zone: Asia/Shanghai
+
+mybatis-plus:
+  configuration:
+    map-underscore-to-camel-case: true
+    log-impl: org.apache.ibatis.logging.slf4j.Slf4jImpl
+  global-config:
+    banner: false
+    db-config:
+      id-type: assign_id          # 雪花算法主键
+      logic-delete-field: isDeleted
+      logic-delete-value: 1
+      logic-not-delete-value: 0
+
+resilience4j:
+  retry:
+    instances:
+      agentCall:
+        max-attempts: 3
+        wait-duration: 500ms
+        enable-exponential-backoff: true
+  circuitbreaker:
+    instances:
+      agentCall:
+        sliding-window-size: 20
+        failure-rate-threshold: 50
+        wait-duration-in-open-state: 15s
+        permitted-number-of-calls-in-half-open-state: 3
+  timelimiter:
+    instances:
+      agentCall:
+        timeout-duration: 60s
+
+mirror:
+  milvus:
+    host: ${MILVUS_HOST:localhost}
+    port: ${MILVUS_PORT:19530}
+    message-collection: message_vector
+    knowledge-collection: knowledge_vector
+    embedding-dim: ${MILVUS_EMBEDDING_DIM:1024}
+  agent:
+    session-ttl-hours: 24          # 会话上下文 Redis 过期时间
+    context-max-rounds: 8          # 对话上下文截取最近 N 轮
+    low-confidence-threshold: 0.7  # 低于该置信度的标签标记为待确认
+    max-regenerate-times: 2        # 合规不通过时最大重生成次数
+    sub-task-max-retry: 2          # 子任务失败默认重试次数
+  compliance:
+    word-dict-path: classpath:compliance/sensitive-words.txt
+    risk-log-enabled: true
+
+logging:
+  level:
+    com.mirror.agent: info
+  pattern:
+    console: "%d{HH:mm:ss.SSS} [%thread] [%X{traceId:-}] %-5level %logger{36} - %msg%n"
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics

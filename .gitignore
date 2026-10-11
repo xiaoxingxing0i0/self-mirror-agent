@@ -1,0 +1,28 @@
+target/
+!.mvn/wrapper/maven-wrapper.jar
+*.class
+*.jar
+*.war
+
+# IDE
+.idea/
+*.iml
+.vscode/
+.classpath
+.project
+.settings/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# 本地数据与日志
+data/
+logs/
+*.log
+
+# 环境密钥
+.env
+
+# 本地 Claude 配置(非项目运行所需)
+.claude/
