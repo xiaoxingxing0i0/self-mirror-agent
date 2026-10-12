@@ -5,6 +5,7 @@ import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.context.properties.ConfigurationPropertiesScan;
 import org.springframework.scheduling.annotation.EnableAsync;
+import org.springframework.scheduling.annotation.EnableScheduling;
 
 /**
  * 自我镜像智能体（人格回溯 Agent）启动类。
@@ -15,6 +16,7 @@ import org.springframework.scheduling.annotation.EnableAsync;
 @ConfigurationPropertiesScan("com.mirror.agent.config")
 @MapperScan("com.mirror.agent.repository")
 @EnableAsync
+@EnableScheduling
 public class SelfMirrorAgentApplication {
 
     public static void main(String[] args) {

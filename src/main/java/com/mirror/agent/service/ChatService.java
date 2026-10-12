@@ -31,6 +31,11 @@ public class ChatService {
     /** SSE 流式对话：逐字返回；全文生成完毕后统一做输出合规与归档 */
     public Flux<String> stream(Long userId, ChatRequest request) {
         StreamPreparation preparation = dpScheduleAgent.prepareStream(userId, request);
+        if (preparation.pending()) {
+            // 碎片已归集待续说：返回空流（零内容块即约定信号），
+            // 合并轮/超时追问的回复经会话级 SSE 订阅通道推送或重开拉取
+            return Flux.empty();
+        }
         if (preparation.intercepted()) {
             return Flux.just(preparation.interceptedReply());
         }

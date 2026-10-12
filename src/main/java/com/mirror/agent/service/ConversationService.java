@@ -5,9 +5,11 @@ import com.mirror.agent.common.BizException;
 import com.mirror.agent.common.ErrorCode;
 import com.mirror.agent.entity.Conversation;
 import com.mirror.agent.entity.Message;
+import com.mirror.agent.message.ConversationClosedEvent;
 import com.mirror.agent.repository.ConversationMapper;
 import com.mirror.agent.repository.MessageMapper;
 import lombok.RequiredArgsConstructor;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -27,6 +29,7 @@ public class ConversationService {
 
     private final ConversationMapper conversationMapper;
     private final MessageMapper messageMapper;
+    private final ApplicationEventPublisher eventPublisher;
 
     /** 会话 ID 为空时创建新会话，否则校验归属后复用 */
     public Conversation getOrCreate(Long userId, Long conversationId) {
@@ -106,5 +109,7 @@ public class ConversationService {
         Conversation conversation = require(conversationId, userId);
         conversation.setStatus(1);
         conversationMapper.updateById(conversation);
+        // 通知归集协调器立即冲刷未完成碎片：用户下次打开会话即可直接看到 Agent 回复
+        eventPublisher.publishEvent(new ConversationClosedEvent(conversationId, userId));
     }
 }

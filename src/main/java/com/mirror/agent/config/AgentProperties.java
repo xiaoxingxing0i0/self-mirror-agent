@@ -27,4 +27,16 @@ public class AgentProperties {
 
     /** 检索默认 TopK */
     private int retrievalTopK = 5;
+
+    /** 碎片归集总开关：用户话未说完时等待续说，超时由 Agent 主动追问 */
+    private boolean fragmentAggregationEnabled = true;
+
+    /** 碎片归集滑动窗口（秒）：每收到一个新碎片，截止时间重置为 now + 该值 */
+    private int fragmentWindowSeconds = 60;
+
+    /** 单轮归集总等待上限（秒）：自首碎片起超过该时长，立即合并并强制澄清追问 */
+    private int fragmentMaxTotalWaitSeconds = 180;
+
+    /** 单轮最多合并碎片数：超过立即合并处理 */
+    private int fragmentMaxFragments = 5;
 }

@@ -29,6 +29,7 @@ spring:
         pool:
           max-active: 16
           max-idle: 8
+      password: 123456
 
   quartz:
     job-store-type: memory
@@ -38,7 +39,7 @@ spring:
   ai:
     openai:
       # 默认对接阿里云百炼（通义千问）OpenAI 兼容模式，可替换为任意兼容网关
-      api-key: ${AI_API_KEY:sk-replace-me}
+      api-key: ${AI_API_KEY:sk-ws-H.PPMRXRL.Rwbq.MEQCIFNQ1Hn2ZimbZlYPr25QTfU0BK00z3ZnHCr9cFqwyUTVAiBF4pBeCySTQxI8gPPKm2CPz6v0men66Xk1JM36q7APsA}
       base-url: ${AI_BASE_URL:https://dashscope.aliyuncs.com/compatible-mode}
       chat:
         options:
@@ -97,6 +98,10 @@ mirror:
     low-confidence-threshold: 0.7  # 低于该置信度的标签标记为待确认
     max-regenerate-times: 2        # 合规不通过时最大重生成次数
     sub-task-max-retry: 2          # 子任务失败默认重试次数
+    fragment-aggregation-enabled: true      # 碎片归集：用户话未说完时等待续说，超时主动追问
+    fragment-window-seconds: 60             # 滑动归集窗口（秒）：每收到新碎片重置截止时间
+    fragment-max-total-wait-seconds: 180    # 单轮归集总等待上限（秒），超过立即合并并强制澄清
+    fragment-max-fragments: 5               # 单轮最多合并碎片数
   compliance:
     word-dict-path: classpath:compliance/sensitive-words.txt
     risk-log-enabled: true

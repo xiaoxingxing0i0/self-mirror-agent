@@ -25,11 +25,10 @@ public class AuthInterceptor implements HandlerInterceptor {
 
     @Override
     public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler) {
-        String header = request.getHeader(AUTH_HEADER);
-        if (header == null || !header.startsWith(BEARER_PREFIX)) {
+        String token = resolveToken(request);
+        if (token == null) {
             throw new BizException(ErrorCode.UNAUTHORIZED);
         }
-        String token = header.substring(BEARER_PREFIX.length()).trim();
         UserContext.setUserId(userService.resolveUserId(token));
         return true;
     }
@@ -38,5 +37,16 @@ public class AuthInterceptor implements HandlerInterceptor {
     public void afterCompletion(HttpServletRequest request, HttpServletResponse response,
                                 Object handler, Exception ex) {
         UserContext.clear();
+    }
+
+    /** Bearer 请求头优先；EventSource 无法携带自定义头，SSE 订阅类接口支持 ?token= 查询参数 */
+    private String resolveToken(HttpServletRequest request) {
+        String header = request.getHeader(AUTH_HEADER);
+        if (header != null && header.startsWith(BEARER_PREFIX)) {
+            String token = header.substring(BEARER_PREFIX.length()).trim();
+            return token.isEmpty() ? null : token;
+        }
+        String param = request.getParameter("token");
+        return param == null || param.isBlank() ? null : param.trim();
     }
 }

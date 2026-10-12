@@ -13,6 +13,9 @@ import java.util.List;
 @Builder
 public class ChatResponse implements Serializable {
 
+    /** 回复类型取值：碎片已归集、Agent 等待用户续说（reply 为空，不算最终回复） */
+    public static final String REPLY_TYPE_PENDING = "pending";
+
     /** 会话 ID */
     private Long conversationId;
 
@@ -25,7 +28,7 @@ public class ChatResponse implements Serializable {
     /** 面向用户的最终回复文本 */
     private String reply;
 
-    /** 回复类型：chat / consult / task_notify / intercepted */
+    /** 回复类型：chat / consult / task_notify / intercepted / pending */
     private String replyType;
 
     /** 情绪基调（用于前端展示） */

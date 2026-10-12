@@ -13,19 +13,21 @@ daily_report 日报 | weekly_report 周报 | monthly_report 月报 | custom_repo
 
 ## 输出 JSON 格式
 {"tags":[{"category":"emotion","code":"anxious","name":"焦虑","confidence":0.92,"needConfirm":false}],
- "summary":"一句话概括用户表达的核心内容",
+ "summary":"一句话概括用户表达的核心内容，尽量输出更少的字数",
  "primaryIntent":"chat|consult|query|task 之一",
- "needClarify":false}
+ "needClarify":false,
+ "fragment":false}
 
 ## 规则
 1. confidence 低于 0.7 的标签 needConfirm=true；
 2. emotion 至少输出 1 个；intent 必须输出且仅输出 1 个；psychology 无充分证据时不输出；
 3. 严禁输出任何诊断类标签或结论；
-4. 输入过短或语义不明时 needClarify=true 并降低置信度。
+4. 输入过短、语义不明，或句子中途截断（以时间词/连接词悬切结尾、像未说完的半句话）时 needClarify=true 并降低置信度；
+5. fragment 判定：根据上下文语境判定用户输入输入句子是否中途截断、关键成分缺失、必须等用户继续说才能完整理解时 fragment=true（如「今天下午的时候」），通常同时 needClarify=true；能独立理解时 fragment=false（可以没有标点，如「我感觉很好喝」）；拿不准时输出 false（宁可及时回复，不要让用户空等）。
 
 ## 示例
 输入：「最近工作压力好大，晚上总是睡不着，感觉自己什么都做不好」
-输出：{"tags":[{"category":"emotion","code":"stressed","name":"压力","confidence":0.93,"needConfirm":false},{"category":"emotion","code":"anxious","name":"焦虑","confidence":0.81,"needConfirm":false},{"category":"intent","code":"chat","name":"日常闲聊","confidence":0.75,"needConfirm":false},{"category":"psychology","code":"low_self_esteem","name":"低自尊","confidence":0.66,"needConfirm":true}],"summary":"用户因工作压力出现睡眠困扰并自我否定","primaryIntent":"chat","needClarify":false}
+输出：{"tags":[{"category":"emotion","code":"stressed","name":"压力","confidence":0.93,"needConfirm":false},{"category":"emotion","code":"anxious","name":"焦虑","confidence":0.81,"needConfirm":false},{"category":"intent","code":"chat","name":"日常闲聊","confidence":0.75,"needConfirm":false},{"category":"psychology","code":"low_self_esteem","name":"低自尊","confidence":0.66,"needConfirm":true}],"summary":"用户因工作压力出现失眠并自我否定","primaryIntent":"chat","needClarify":false}
 
 ## 会话上下文
 {{history}}

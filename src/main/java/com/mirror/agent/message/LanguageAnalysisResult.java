@@ -24,6 +24,9 @@ public class LanguageAnalysisResult implements Serializable {
     /** 是否存在待确认（低置信度）标签，需引导用户澄清 */
     private boolean needClarify;
 
+    /** 输入句子中途截断、需等用户续说才能完整理解（碎片归集判定信号） */
+    private boolean fragment;
+
     public List<TagItem> tagsOf(String category) {
         return tags.stream().filter(t -> category.equals(t.getCategory())).toList();
     }
