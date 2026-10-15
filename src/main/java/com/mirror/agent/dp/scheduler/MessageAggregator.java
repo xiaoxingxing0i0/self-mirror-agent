@@ -38,10 +38,12 @@ public class MessageAggregator {
                 .score(DEADLINE_KEY, String.valueOf(conversationId)) != null;
     }
 
-    /** 原子认领归集定时器（ZREM）：多实例/多线程仅一个调用方成功 */
+    /** 原子认领归集定时器（ZREM）：多实例/多线程仅一个调用方成功。
+     * 注意 ZSetOperations.remove 返回 Long=实际移除数，不能用 Boolean.equals 判定 */
     public boolean claim(Long conversationId) {
-        return Boolean.TRUE.equals(stringRedisTemplate.opsForZSet()
-                .remove(DEADLINE_KEY, String.valueOf(conversationId)));
+        Long removed = stringRedisTemplate.opsForZSet()
+                .remove(DEADLINE_KEY, String.valueOf(conversationId));
+        return removed != null && removed > 0;
     }
 
     /** 写入/刷新缓冲与滑动截止时间：deadline = min(now+窗口, 首碎片时间+总上限)，返回 deadline 毫秒 */
@@ -53,6 +55,7 @@ public class MessageAggregator {
         long deadline = Math.min(now + windowMillis(), buffer.getFirstTs() + totalWaitMillis());
         Duration ttl = Duration.ofMillis(Math.max(deadline - now, 1000L)).plus(BUFFER_REDUNDANCY);
         redisTemplate.opsForValue().set(BUFFER_PREFIX + conversationId, buffer, ttl);
+        log.info("Set DeadLine Key Data");
         stringRedisTemplate.opsForZSet().add(DEADLINE_KEY, String.valueOf(conversationId), deadline);
         return deadline;
     }
@@ -68,6 +71,11 @@ public class MessageAggregator {
     public void clear(Long conversationId) {
         redisTemplate.delete(BUFFER_PREFIX + conversationId);
         claim(conversationId);
+    }
+
+    /** 丢弃无法解析的脏队列成员（防御：避免其永久占据到期扫描队头） */
+    public void dropRawMember(String member) {
+        stringRedisTemplate.opsForZSet().remove(DEADLINE_KEY, member);
     }
 
     /** 到期（含过期未认领）的会话 ID 集合，按截止时间升序 */
