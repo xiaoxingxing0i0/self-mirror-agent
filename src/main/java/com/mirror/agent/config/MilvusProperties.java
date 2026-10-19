@@ -20,6 +20,9 @@ public class MilvusProperties {
     /** 知识库向量集合 */
     private String knowledgeCollection = "knowledge_vector";
 
+    /** 事件摘要向量集合（情绪-事件关联查重检索） */
+    private String eventCollection = "event_vector";
+
     /** 嵌入向量维度（需与嵌入模型一致） */
     private int embeddingDim = 1024;
 }

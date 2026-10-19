@@ -27,6 +27,9 @@ public class LanguageAnalysisResult implements Serializable {
     /** 输入句子中途截断、需等用户续说才能完整理解（碎片归集判定信号） */
     private boolean fragment;
 
+    /** 本轮提及的事件草案（0..N 个；情绪挂各事件对象内；空=无事件，泛化情绪不建事件） */
+    private List<EventDraft> events = new ArrayList<>();
+
     public List<TagItem> tagsOf(String category) {
         return tags.stream().filter(t -> category.equals(t.getCategory())).toList();
     }

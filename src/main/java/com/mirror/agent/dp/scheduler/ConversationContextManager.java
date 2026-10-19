@@ -12,7 +12,12 @@ import java.time.LocalDateTime;
 
 /**
  * 会话上下文管理（Redis，24h 过期，docs/agent_implementation.md §3.1）。
- * 支持快照机制：链路执行前留存上一稳定状态，异常时可回滚。
+ *
+ * <p>短期记忆定位：键为 用户ID+会话ID 双维度（mirror:ctx:{userId}:{conversationId}），
+ * 不同会话分别独立存储；单会话内消息按轮数上限 FIFO 截断（trim 保留最近 N 轮，最旧先丢弃），
+ * 被淘汰的更早内容由 Milvus 用户级历史检索兜底，message 表始终为事实源。</p>
+ *
+ * <p>支持快照机制：链路执行前留存上一稳定状态，异常时可回滚。</p>
  */
 @Slf4j
 @Component
@@ -27,7 +32,7 @@ public class ConversationContextManager {
 
     /** 加载上下文，不存在则初始化空上下文 */
     public ConversationContext load(Long conversationId, Long userId) {
-        Object cached = redisTemplate.opsForValue().get(KEY_PREFIX + conversationId);
+        Object cached = redisTemplate.opsForValue().get(contextKey(userId, conversationId));
         if (cached instanceof ConversationContext context) {
             return context;
         }
@@ -41,19 +46,19 @@ public class ConversationContextManager {
     /** 截取最近 N 轮后写回 Redis 并刷新 TTL */
     public void save(ConversationContext context) {
         context.trim(agentProperties.getContextMaxRounds());
-        redisTemplate.opsForValue().set(KEY_PREFIX + context.getConversationId(), context,
-                Duration.ofHours(agentProperties.getSessionTtlHours()));
+        redisTemplate.opsForValue().set(contextKey(context.getUserId(), context.getConversationId()),
+                context, Duration.ofHours(agentProperties.getSessionTtlHours()));
     }
 
     /** 执行前留存快照（上一稳定状态） */
     public void snapshot(ConversationContext context) {
-        redisTemplate.opsForValue().set(SNAPSHOT_PREFIX + context.getConversationId(), context,
-                Duration.ofHours(agentProperties.getSessionTtlHours()));
+        redisTemplate.opsForValue().set(snapshotKey(context.getUserId(), context.getConversationId()),
+                context, Duration.ofHours(agentProperties.getSessionTtlHours()));
     }
 
     /** 异常时回滚到快照 */
     public ConversationContext restoreSnapshot(Long conversationId, Long userId) {
-        Object snapshot = redisTemplate.opsForValue().get(SNAPSHOT_PREFIX + conversationId);
+        Object snapshot = redisTemplate.opsForValue().get(snapshotKey(userId, conversationId));
         if (snapshot instanceof ConversationContext context) {
             log.info("会话上下文已回滚到快照: conversationId={}", conversationId);
             return context;
@@ -61,8 +66,19 @@ public class ConversationContextManager {
         return load(conversationId, userId);
     }
 
-    public void evict(Long conversationId) {
-        redisTemplate.delete(KEY_PREFIX + conversationId);
-        redisTemplate.delete(SNAPSHOT_PREFIX + conversationId);
+    /** 主动清除某用户某会话的短期记忆（上下文 + 快照） */
+    public void evict(Long userId, Long conversationId) {
+        redisTemplate.delete(contextKey(userId, conversationId));
+        redisTemplate.delete(snapshotKey(userId, conversationId));
+    }
+
+    /** 上下文键：用户ID + 会话ID 双维度，会话间隔离存储 */
+    private String contextKey(Long userId, Long conversationId) {
+        return KEY_PREFIX + userId + ":" + conversationId;
+    }
+
+    /** 快照键：与上下文键同维度 */
+    private String snapshotKey(Long userId, Long conversationId) {
+        return SNAPSHOT_PREFIX + userId + ":" + conversationId;
     }
 }

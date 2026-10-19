@@ -4,6 +4,7 @@ import com.mirror.agent.agent.resident.ConversationAgent;
 import com.mirror.agent.agent.resident.ConversationAgent.Scene;
 import com.mirror.agent.agent.resident.RetrievalAgent;
 import com.mirror.agent.agent.resident.TaskExecutionAgent;
+import com.mirror.agent.config.AgentProperties;
 import com.mirror.agent.dp.entity.ConversationContext;
 import com.mirror.agent.entity.Task;
 import com.mirror.agent.message.AgentResult;
@@ -13,6 +14,7 @@ import com.mirror.agent.message.LanguageAnalysisResult;
 import com.mirror.agent.message.RetrievalItem;
 import com.mirror.agent.message.RetrievalRequest;
 import com.mirror.agent.message.TagItem;
+import com.mirror.agent.service.EventService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -47,6 +49,8 @@ public class IntentRouter {
     private final RetrievalAgent retrievalAgent;
     private final TaskExecutionAgent taskExecutionAgent;
     private final AgentInvoker invoker;
+    private final EventService eventService;
+    private final AgentProperties agentProperties;
 
     /** 路由结果：对话场景 + 模板变量 + 回复类型 + 关联任务 ID */
     public record RouteOutcome(Scene scene, Map<String, String> vars, String replyType, Long taskId) {
@@ -59,14 +63,29 @@ public class IntentRouter {
             return new RouteOutcome(Scene.CLARIFY, Map.of(
                     "input", request.getContent(),
                     "summary", analysis.getSummary() == null ? "" : analysis.getSummary(),
-                    "history", history), "clarify", null);
+                    "history", history,
+                    "recentEvents", eventContext(userId)), "clarify", null);
         }
         return switch (analysis.getPrimaryIntent()) {
             case "consult" -> consultRoute(userId, request, analysis, history);
             case "query" -> queryRoute(userId, request);
             case "task" -> taskRoute(userId, request, analysis);
-            default -> chatRoute(analysis, request, history);
+            default -> chatRoute(userId, analysis, request, history);
         };
+    }
+
+    /** 对话 Prompt 的事件背景注入段（用户近期提及的事件，帮助模型了解前因后果） */
+    private String eventContext(Long userId) {
+        if (!agentProperties.isEventPipelineEnabled()) {
+            return "（无）";
+        }
+        try {
+            String refs = eventService.renderRecentEventRefs(userId);
+            return refs.isBlank() ? "（无）" : refs;
+        } catch (Exception e) {
+            log.warn("事件上下文注入失败，按无事件处理: {}", e.getMessage());
+            return "（无）";
+        }
     }
 
     /** 咨询分支：RAG 知识库检索 → 共情回复（scene.md 场景 2） */
@@ -87,6 +106,7 @@ public class IntentRouter {
         vars.put("retrievalContext", knowledgeContext);
         vars.put("history", history);
         vars.put("input", request.getContent());
+        vars.put("recentEvents", eventContext(userId));
         return new RouteOutcome(Scene.COMFORT, vars, "consult", null);
     }
 
@@ -136,13 +156,15 @@ public class IntentRouter {
     }
 
     /** 闲聊/情绪分支：负面情绪走安抚模板，否则日常闲聊模板（串行模式） */
-    private RouteOutcome chatRoute(LanguageAnalysisResult analysis, ChatRequest request, String history) {
+    private RouteOutcome chatRoute(Long userId, LanguageAnalysisResult analysis,
+                                   ChatRequest request, String history) {
         boolean negative = analysis.tagsOf(TagItem.CATEGORY_EMOTION).stream()
                 .anyMatch(tag -> NEGATIVE_EMOTIONS.contains(tag.getCode()));
         Map<String, String> vars = new HashMap<>();
         vars.put("emotionTags", emotionTagText(analysis));
         vars.put("history", history);
         vars.put("input", request.getContent());
+        vars.put("recentEvents", eventContext(userId));
         if (negative) {
             vars.put("retrievalContext", "（本次未检索知识库）");
             return new RouteOutcome(Scene.COMFORT, vars, "chat", null);

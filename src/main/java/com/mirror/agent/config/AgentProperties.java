@@ -39,4 +39,28 @@ public class AgentProperties {
 
     /** 单轮最多合并碎片数：超过立即合并处理 */
     private int fragmentMaxFragments = 5;
+
+    /** 情绪-事件关联链路总开关（关闭=忽略 analyze 的 events 输出，不落事件数据） */
+    private boolean eventPipelineEnabled = true;
+
+    /** 查重高置信阈值：rerank 候选的向量相似度 ≥ 该值直接归并为既有事件 */
+    private double eventDedupHighScore = 0.92;
+
+    /** 查重低置信阈值：介于上下阈值之间走 LLM 同事件裁决，低于则新建 */
+    private double eventDedupLowScore = 0.80;
+
+    /** rerank 时间衰减常数 τ（天）：exp(-Δt/τ) */
+    private int eventTimeDecayTauDays = 7;
+
+    /** episode 间隔（分钟）：距上次提及超过该时长再提 = 重提（REKINDLED），否则连续（CONTINUATION） */
+    private int eventEpisodeGapMinutes = 30;
+
+    /** EMERGING 事件无新增提及后的定稿时间（分钟） */
+    private int eventFinalizeMinutes = 20;
+
+    /** 上下文注入的最近提及事件个数 */
+    private int eventContextCount = 3;
+
+    /** 事件查重向量检索 TopK */
+    private int eventSearchTopk = 5;
 }

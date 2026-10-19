@@ -89,6 +89,6 @@ public class DpScheduleAgent {
         String userTurnText = preparation.mergedContent() != null
                 ? preparation.mergedContent() : preparation.userMessage().getContent();
         chainSupport.archiveContext(preparation.context(), userId, sourceIds, userTurnText,
-                preparation.analysis(), finalReply);
+                preparation.analysis(), finalReply, preparation.scene());
     }
 }

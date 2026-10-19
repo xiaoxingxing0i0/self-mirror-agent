@@ -25,5 +25,8 @@ public enum AgentType {
     COMPLIANCE,
 
     /** 用户画像与报告 Agent */
-    PROFILE_REPORT
+    PROFILE_REPORT,
+
+    /** 事件分析 Agent（查重灰区同事件裁决） */
+    EVENT
 }

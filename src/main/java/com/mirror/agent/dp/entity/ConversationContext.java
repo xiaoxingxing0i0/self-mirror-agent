@@ -22,14 +22,21 @@ public class ConversationContext implements Serializable {
         private int role;
         private String content;
         private LocalDateTime time;
+        /** 关联 message 表 ID（渲染为 [id=..] 供模型回溯归因引用；旧缓存数据为 null 兼容） */
+        private Long messageId;
 
         public ContextMessage() {
         }
 
         public ContextMessage(int role, String content, LocalDateTime time) {
+            this(role, content, time, null);
+        }
+
+        public ContextMessage(int role, String content, LocalDateTime time, Long messageId) {
             this.role = role;
             this.content = content;
             this.time = time;
+            this.messageId = messageId;
         }
     }
 
@@ -52,7 +59,12 @@ public class ConversationContext implements Serializable {
     private LocalDateTime lastActiveTime;
 
     public void appendMessage(int role, String content) {
-        recentMessages.add(new ContextMessage(role, content, LocalDateTime.now()));
+        appendMessage(role, content, null);
+    }
+
+    /** 携带 message 表 ID 的追加（历史渲染带 [id=..]，支撑模型回溯归因） */
+    public void appendMessage(int role, String content, Long messageId) {
+        recentMessages.add(new ContextMessage(role, content, LocalDateTime.now(), messageId));
         lastActiveTime = LocalDateTime.now();
     }
 
@@ -72,9 +84,11 @@ public class ConversationContext implements Serializable {
             builder.append("[早期对话摘要] ").append(historySummary).append('\n');
         }
         for (ContextMessage message : recentMessages) {
-            builder.append(message.getRole() == 0 ? "用户: " : "助手: ")
-                    .append(message.getContent())
-                    .append('\n');
+            builder.append(message.getRole() == 0 ? "用户" : "助手");
+            if (message.getMessageId() != null) {
+                builder.append("[id=").append(message.getMessageId()).append(']');
+            }
+            builder.append(": ").append(message.getContent()).append('\n');
         }
         return builder.toString();
     }

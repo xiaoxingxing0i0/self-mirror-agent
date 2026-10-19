@@ -29,8 +29,18 @@ public class LanguageAnalysisAgent {
     private final AgentProperties agentProperties;
 
     public AgentResult<LanguageAnalysisResult> analyze(String input, String history) {
+        return analyze(input, history, null);
+    }
+
+    /**
+     * 语言分析 + 事件抽取（单次结构化输出）。
+     *
+     * @param eventRefs 最近提及事件注入（事件同一性指认依据，场景 2 的数据来源；可空）
+     */
+    public AgentResult<LanguageAnalysisResult> analyze(String input, String history, String eventRefs) {
         String prompt = promptUtil.render(TEMPLATE, Map.of(
                 "history", history == null || history.isBlank() ? "（无历史对话）" : history,
+                "recentEvents", eventRefs == null || eventRefs.isBlank() ? "（无最近提及事件）" : eventRefs,
                 "input", input));
         LanguageAnalysisResult result = callModel(prompt);
         if (result == null) {

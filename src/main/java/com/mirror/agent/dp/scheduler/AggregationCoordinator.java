@@ -25,14 +25,10 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * 碎片归集协调器（用户话未说完 → 等待续说 → 超时主动追问），对话链路的实际编排者。
- *
- * <p>完整性判定（并入语言分析方案）：高置信规则仅作「明显碎片快速通道」（跳过分析直接等待）；
- * 其余消息全部由标准链路必跑的语言分析 {@code fragment} 字段判定，零额外模型调用、全量覆盖。</p>
- *
- * <p>滑动窗口（每碎片重置 deadline，单轮总上限封顶）；缓冲/定时器在 Redis，ZREM 原子认领
- * 保证超时冲刷多实例仅执行一次；追问先落库、再经会话级 SSE 通道投递，离线重开拉历史兜底。
- * 关闭归集开关时本类退化为标准链路直通（行为与归集功能上线前一致）。</p>
+ * 碎片归集协调器（话未说完→等待续说→超时主动追问），对话链路的实际编排者。
+ * 完整性判定：高置信规则为「明显碎片快速通道」，其余由 analyze 的 fragment 字段全量判定（零额外调用）；
+ * 滑动窗口 + Redis ZSET 定时器（ZREM 认领多实例互斥）；追问先落库再 SSE 投递，离线重开拉历史兜底；
+ * 归集关闭时退化为标准链路直通。事件链路完成后异步交 {@link EventResolver} 处理。
  */
 @Slf4j
 @Component
@@ -47,6 +43,7 @@ public class AggregationCoordinator {
     private final ConversationService conversationService;
     private final IntentRouter intentRouter;
     private final ChatPushService pushService;
+    private final EventResolver eventResolver;
 
     // ==================== 同步对话入口 ====================
 
@@ -78,8 +75,11 @@ public class AggregationCoordinator {
             bufferFreshFragment(conversation, userId, userMessage);
             return chainSupport.buildPending(conversation.getId(), userMessage.getId());
         }
-        return executeTurn(conversation, userId, request.getContent(),
+        ChatResponse response = executeTurn(conversation, userId, request.getContent(),
                 List.of(userMessage.getId()), analysis, context);
+        eventResolver.resolveAsync(userId, conversation.getId(),
+                List.of(userMessage.getId()), analysis);
+        return response;
     }
 
     /** 窗口内续说：合规先行（不过则窗口原样保留）→ 原子认领 → 合并文本分析一次，路由复用同一结果 */
@@ -103,10 +103,17 @@ public class AggregationCoordinator {
             rebufferContinued(conversation, userId, firstTs, fragments);
             return chainSupport.buildPending(conversation.getId(), current.getId());
         }
-        if (analysis.isFragment()) {
+        boolean forcedClarify = analysis.isFragment();
+        if (forcedClarify) {
             analysis.setNeedClarify(true);
         }
-        return executeTurn(conversation, userId, merged, messageIds(fragments), analysis, context);
+        ChatResponse response = executeTurn(conversation, userId, merged,
+                messageIds(fragments), analysis, context);
+        if (!forcedClarify) {
+            eventResolver.resolveAsync(userId, conversation.getId(),
+                    messageIds(fragments), analysis);
+        }
+        return response;
     }
 
     // ==================== 流式对话入口 ====================
@@ -139,6 +146,8 @@ public class AggregationCoordinator {
             bufferFreshFragment(conversation, userId, userMessage);
             return StreamPreparation.pending(conversation);
         }
+        eventResolver.resolveAsync(userId, conversation.getId(),
+                List.of(userMessage.getId()), analysis);
         return routedPreparation(conversation, context, analysis, request.getContent(),
                 userMessage, null, null);
     }
@@ -162,11 +171,17 @@ public class AggregationCoordinator {
         LanguageAnalysisResult analysis = chainSupport.analyze(merged, context);
         boolean overflowed = aggregator.overflowed(firstTs, fragments.size());
         if (!overflowed && analysis.isFragment()) {
+            log.info("未达到归集上限，且需要归集");
             rebufferContinued(conversation, userId, firstTs, fragments);
             return StreamPreparation.pending(conversation);
         }
-        if (analysis.isFragment()) {
+        boolean forcedClarify = analysis.isFragment();
+        if (forcedClarify) {
             analysis.setNeedClarify(true);
+        }
+        if (!forcedClarify) {
+            eventResolver.resolveAsync(userId, conversation.getId(),
+                    messageIds(fragments), analysis);
         }
         return routedPreparation(conversation, context, analysis, merged,
                 null, messageIds(fragments), merged);
@@ -189,6 +204,8 @@ public class AggregationCoordinator {
     public void flushTimedOut(Long conversationId) {
         FragmentBuffer buffer = aggregator.takeBuffer(conversationId);
         if (buffer == null || buffer.getFragments().isEmpty()) {
+            log.warn("到期已认领但归集缓冲不存在（TTL 过期或已被消费），本轮不追问: conversationId={}",
+                    conversationId);
             return;
         }
         Conversation conversation = conversationService.require(conversationId, buffer.getUserId());
@@ -228,7 +245,8 @@ public class AggregationCoordinator {
         String reply = chainSupport.generateWithCompliance(route);
         Message replyMessage = conversationService.saveMessage(
                 conversation.getId(), userId, Message.ROLE_SYSTEM, reply);
-        chainSupport.archiveContext(context, userId, sourceMessageIds, inputText, analysis, reply);
+        chainSupport.archiveContext(context, userId, sourceMessageIds, inputText, analysis, reply,
+                route.scene());
         return chainSupport.buildResponse(conversation.getId(),
                 sourceMessageIds.get(sourceMessageIds.size() - 1),
                 replyMessage.getId(), reply, route, analysis);

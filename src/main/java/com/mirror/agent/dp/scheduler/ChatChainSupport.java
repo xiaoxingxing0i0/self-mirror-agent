@@ -17,6 +17,7 @@ import com.mirror.agent.message.ComplianceResult.ViolationLevel;
 import com.mirror.agent.message.LanguageAnalysisResult;
 import com.mirror.agent.message.TagItem;
 import com.mirror.agent.service.ConversationService;
+import com.mirror.agent.service.EventService;
 import com.mirror.agent.service.TagService;
 import com.mirror.agent.service.VectorArchiveService;
 import lombok.RequiredArgsConstructor;
@@ -43,6 +44,7 @@ public class ChatChainSupport {
     private final ConversationService conversationService;
     private final TagService tagService;
     private final VectorArchiveService vectorArchiveService;
+    private final EventService eventService;
     private final AgentProperties agentProperties;
 
     /** 输入合规检查 */
@@ -61,10 +63,12 @@ public class ChatChainSupport {
                 ? checkResult.getInterceptedReply() : ComplianceAgent.MODERATE_FALLBACK;
     }
 
-    /** 语言分析（失败时由 Agent 内部降级为待澄清闲聊；熔断时调度层兜底） */
+    /** 语言分析 + 事件抽取（失败时由 Agent 内部降级为待澄清闲聊；熔断时调度层兜底） */
     public LanguageAnalysisResult analyze(String content, ConversationContext context) {
+        String eventRefs = renderRecentEventRefs(context.getUserId());
         AgentResult<LanguageAnalysisResult> result = invoker.invoke(AgentType.LANGUAGE_ANALYSIS,
-                "analyze", () -> languageAnalysisAgent.analyze(content, context.renderHistory()));
+                "analyze", () -> languageAnalysisAgent.analyze(
+                        content, context.renderHistory(), eventRefs));
         if (result.getData() != null) {
             return result.getData();
         }
@@ -74,6 +78,19 @@ public class ChatChainSupport {
         fallback.setNeedClarify(true);
         fallback.setSummary("语言分析暂不可用");
         return fallback;
+    }
+
+    /** 最近提及事件注入（场景 2 上下文指认依据）；开关关闭或查询失败返回空串，不影响主链路 */
+    private String renderRecentEventRefs(Long userId) {
+        if (!agentProperties.isEventPipelineEnabled() || userId == null) {
+            return "";
+        }
+        try {
+            return eventService.renderRecentEventRefs(userId);
+        } catch (Exception e) {
+            log.warn("最近事件上下文获取失败，跳过注入: {}", e.getMessage());
+            return "";
+        }
     }
 
     /** 生成回复并做输出合规：轻度违规重生成（最多 N 次），中/重度直接拦截 */
@@ -106,16 +123,23 @@ public class ChatChainSupport {
 
     /**
      * 全量归档：本轮全部来源消息打标（碎片合并轮逐碎片溯源）+ 上下文回写 Redis。
+     * 日常闲聊（Scene.DAILY）不写 tag_record：无画像/事件价值，避免稀释统计；
+     * 安抚/咨询/澄清/任务分支照常落标。tag 的事件归因（event_id）由事件链路异步回填。
      *
      * @param sourceMessageIds 本轮输入对应的用户消息 ID 集（普通轮单条、合并轮多条）
      * @param userTurnText     写入上下文的用户轮文本（合并轮为合并后全文）
+     * @param scene            对话场景（打标跳过判定依据）
      */
     public void archiveContext(ConversationContext context, Long userId, List<Long> sourceMessageIds,
-                               String userTurnText, LanguageAnalysisResult analysis, String reply) {
-        for (Long messageId : sourceMessageIds) {
-            tagService.saveTags(messageId, userId, analysis.getTags());
+                               String userTurnText, LanguageAnalysisResult analysis, String reply,
+                               ConversationAgent.Scene scene) {
+        if (scene != ConversationAgent.Scene.DAILY) {
+            for (Long messageId : sourceMessageIds) {
+                tagService.saveTags(messageId, userId, analysis.getTags());
+            }
         }
-        context.appendMessage(Message.ROLE_USER, userTurnText);
+        context.appendMessage(Message.ROLE_USER, userTurnText,
+                sourceMessageIds.get(sourceMessageIds.size() - 1));
         context.appendMessage(Message.ROLE_SYSTEM, reply);
         context.setLatestTags(analysis.getTags());
         contextManager.save(context);

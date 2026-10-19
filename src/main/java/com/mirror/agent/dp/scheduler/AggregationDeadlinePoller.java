@@ -29,8 +29,18 @@ public class AggregationDeadlinePoller {
             return;
         }
         for (String member : aggregator.dueConversations(BATCH_LIMIT)) {
-            long conversationId = Long.parseLong(member);
+            long conversationId;
+            try {
+                conversationId = Long.parseLong(member);
+            } catch (NumberFormatException e) {
+                log.warn("到期队列存在非法成员，已丢弃: member={}", member);
+                aggregator.dropRawMember(member);
+                continue;
+            }
+            log.info("拉取到抵达回复时间的消息 会话id：{}", member);
             if (!aggregator.claim(conversationId)) {
+                log.info("截止时间已被并发方认领（续说合并/关闭冲刷/其他实例），跳过: conversationId={}",
+                        conversationId);
                 continue;
             }
             try {

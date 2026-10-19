@@ -36,5 +36,8 @@ public class TagRecord {
     /** 置信度 0-1 */
     private BigDecimal confidence;
 
+    /** 关联事件 ID（情绪-事件归因，事件链路异步回填；NULL=未归因/无事件情绪） */
+    private Long eventId;
+
     private LocalDateTime createTime;
 }

@@ -57,4 +57,38 @@ public class TagService {
     public List<EmotionTrendStat> statEmotionTrend(Long userId, LocalDateTime start, LocalDateTime end) {
         return tagRecordMapper.statEmotionTrend(userId, start, end);
     }
+
+    /**
+     * 本轮消息的事件归因回填：仅更新指定消息中命中这些标签码且尚未归因的行。
+     * user_id 条件保证跨用户 id 伪造无效；event_id IS NULL 保证不覆盖已归因行。
+     */
+    public int fillTagsByCodes(Long userId, List<Long> messageIds, Long eventId, List<String> tagCodes) {
+        if (messageIds == null || messageIds.isEmpty() || tagCodes == null || tagCodes.isEmpty()) {
+            return 0;
+        }
+        return tagRecordMapper.update(null, Wrappers.<TagRecord>lambdaUpdate()
+                .set(TagRecord::getEventId, eventId)
+                .eq(TagRecord::getUserId, userId)
+                .in(TagRecord::getMessageId, messageIds)
+                .in(TagRecord::getTagCode, tagCodes)
+                .isNull(TagRecord::getEventId));
+    }
+
+    /**
+     * 回溯归因：把先前「说了情绪未说事由」的历史消息标签行归因到本次事件
+     * （如先说「我好伤心啊」、后说事件原委的场景）。
+     * 仅 emotion/psychology 类且未归因的行可被回填；user_id 隔离防越权。
+     */
+    public int backfillTagsToEvent(Long userId, List<Long> messageIds, Long eventId) {
+        if (messageIds == null || messageIds.isEmpty()) {
+            return 0;
+        }
+        return tagRecordMapper.update(null, Wrappers.<TagRecord>lambdaUpdate()
+                .set(TagRecord::getEventId, eventId)
+                .eq(TagRecord::getUserId, userId)
+                .in(TagRecord::getMessageId, messageIds)
+                .in(TagRecord::getTagCategory,
+                        List.of(TagItem.CATEGORY_EMOTION, TagItem.CATEGORY_PSYCHOLOGY))
+                .isNull(TagRecord::getEventId));
+    }
 }
