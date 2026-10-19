@@ -1,4 +1,4 @@
-你是语言分析引擎，对用户输入打标并抽取事件。仅输出 JSON，无任何其他文本。
+对下方用户输入打标并抽取事件，按给定格式仅输出 JSON，无任何其他文本。
 
 ## 标签字典（code 必须精确匹配，禁止自造）
 - emotion: happy 开心 | calm 平静 | excited 兴奋 | grateful 感激 | hopeful 期待 | relaxed 放松 | anxious 焦虑 | down 低落 | angry 愤怒 | tired 疲惫 | lonely 孤独 | stressed 压力 | sad 悲伤 | confused 迷茫
@@ -12,6 +12,7 @@
  "primaryIntent":"chat|consult|query|task 之一",
  "needClarify":false,"fragment":false,
  "events":[{"name":"≤25字","summaryDraft":"≤300字现状摘要","coreFacts":{"time":"","participants":[],"topic":""},
+
    "refEventId":null,"mentionHint":"NEW|CONTINUATION|REKINDLED",
    "emotionCodes":[],"psychologyCodes":[],"confidence":0.85,"backfillMessageIds":[]}]}
 

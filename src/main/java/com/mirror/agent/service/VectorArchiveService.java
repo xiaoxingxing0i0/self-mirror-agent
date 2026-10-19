@@ -22,7 +22,8 @@ public class VectorArchiveService {
 
     /** 异步向量化归档，失败仅记录日志（不影响对话主链路，可离线补偿） */
     @Async
-    public void archiveMessage(Message message) {
+    public void
+    archiveMessage(Message message) {
         try {
             float[] embedding = embeddingModel.embed(message.getContent());
             messageVectorRepository.insertMessageVector(message.getId(), message.getUserId(),

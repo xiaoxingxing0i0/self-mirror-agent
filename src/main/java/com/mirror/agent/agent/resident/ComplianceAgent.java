@@ -2,6 +2,9 @@ package com.mirror.agent.agent.resident;
 
 import com.mirror.agent.common.ErrorCode;
 import com.mirror.agent.config.ComplianceProperties;
+import com.mirror.agent.llm.AgentRole;
+import com.mirror.agent.llm.LlmGateway;
+import com.mirror.agent.llm.LlmRequest;
 import com.mirror.agent.message.AgentResult;
 import com.mirror.agent.message.ComplianceResult;
 import com.mirror.agent.message.ComplianceResult.TextType;
@@ -12,7 +15,6 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.stereotype.Component;
 
 import java.util.Comparator;
@@ -44,7 +46,7 @@ public class ComplianceAgent {
                     + "但无法提供医疗诊断或建议。我们聊聊别的吧——你最近的感受怎么样？";
 
     private final SensitiveWordFilter sensitiveWordFilter;
-    private final ChatClient chatClient;
+    private final LlmGateway llmGateway;
     private final PromptUtil promptUtil;
     private final ComplianceProperties complianceProperties;
 
@@ -105,7 +107,7 @@ public class ComplianceAgent {
         try {
             String prompt = promptUtil.render("compliance-check.txt",
                     Map.of("textType", type.name(), "content", text));
-            verdict = chatClient.prompt().user(prompt).call().entity(LlmVerdict.class);
+            verdict = llmGateway.callStructured(LlmRequest.of(AgentRole.COMPLIANCE, prompt), LlmVerdict.class);
         } catch (Exception e) {
             log.warn("合规模型校验失败，降级放行（一级词库校验已通过）: {}", e.getMessage());
             return ComplianceResult.pass();

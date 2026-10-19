@@ -77,6 +77,11 @@
             <groupId>org.springframework.ai</groupId>
             <artifactId>spring-ai-starter-model-openai</artifactId>
         </dependency>
+        <!-- Spring AI：Ollama 本地模型（chat 自动装配已关闭，ChatModelConfig 手动装配双后端） -->
+        <dependency>
+            <groupId>org.springframework.ai</groupId>
+            <artifactId>spring-ai-starter-model-ollama</artifactId>
+        </dependency>
 
         <!-- 持久层：MyBatis-Plus + MySQL + Flyway -->
         <dependency>
@@ -146,14 +151,8 @@
                     </excludes>
                 </configuration>
             </plugin>
-            <plugin>
-                <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-compiler-plugin</artifactId>
-                <configuration>
-                    <source>14</source>
-                    <target>14</target>
-                </configuration>
-            </plugin>
+            <!-- maven-compiler-plugin 不再覆盖 source/target，跟随 parent 的 java.version（21）；
+                 此前写死 14 会导致 text block 等 Java 15+ 语法无法编译 -->
         </plugins>
     </build>
 </project>

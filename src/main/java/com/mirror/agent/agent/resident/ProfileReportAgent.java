@@ -4,6 +4,9 @@ import com.mirror.agent.common.ErrorCode;
 import com.mirror.agent.config.AgentProperties;
 import com.mirror.agent.entity.AnalysisReport;
 import com.mirror.agent.entity.UserProfile;
+import com.mirror.agent.llm.AgentRole;
+import com.mirror.agent.llm.LlmGateway;
+import com.mirror.agent.llm.LlmRequest;
 import com.mirror.agent.message.AgentResult;
 import com.mirror.agent.message.ComplianceResult;
 import com.mirror.agent.repository.MessageMapper;
@@ -19,7 +22,6 @@ import com.mirror.agent.util.MarkdownReportRenderer.Section;
 import com.mirror.agent.util.PromptUtil;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.stereotype.Component;
 
 import java.time.LocalDate;
@@ -47,7 +49,7 @@ public class ProfileReportAgent {
     private final ReportService reportService;
     private final MessageMapper messageMapper;
     private final ComplianceAgent complianceAgent;
-    private final ChatClient chatClient;
+    private final LlmGateway llmGateway;
     private final PromptUtil promptUtil;
     private final MarkdownReportRenderer reportRenderer;
     private final AgentProperties agentProperties;
@@ -106,7 +108,7 @@ public class ProfileReportAgent {
                 "profileSummary", profile == null ? "（暂无画像数据）"
                         : "样本量 " + profile.getSampleCount() + "，情绪特征 " + profile.getEmotionFeature()));
         try {
-            String sections = chatClient.prompt().user(prompt).call().content();
+            String sections = llmGateway.call(LlmRequest.of(AgentRole.PROFILE_REPORT, prompt));
             return sections == null ? "" : sections;
         } catch (Exception e) {
             log.error("报告结论生成失败，仅输出统计部分: type={}", reportType, e);

@@ -1,11 +1,13 @@
 package com.mirror.agent.agent.resident;
 
 import com.mirror.agent.common.ErrorCode;
+import com.mirror.agent.llm.AgentRole;
+import com.mirror.agent.llm.LlmGateway;
+import com.mirror.agent.llm.LlmRequest;
 import com.mirror.agent.message.AgentResult;
 import com.mirror.agent.util.PromptUtil;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.stereotype.Component;
 import reactor.core.publisher.Flux;
 
@@ -13,7 +15,8 @@ import java.util.Map;
 
 /**
  * 用户对话 Agent（docs/agent_definition.md §2.3）。
- * 4+1 类场景化 Prompt 模板；人设固化在 ChatClient 默认 System Prompt（AiConfig）；
+ * 4+1 类场景化 Prompt 模板；人设与角色定义固化在 CONVERSATION 角色的 System Prompt
+ * （prompts/system/persona.txt + conversation-agent.txt，经 LlmGateway 统一路由）；
  * 生成结果先返回调度 Agent，经合规校验后再输出给用户；支持 SSE 流式输出。
  */
 @Slf4j
@@ -40,14 +43,14 @@ public class ConversationAgent {
         }
     }
 
-    private final ChatClient chatClient;
+    private final LlmGateway llmGateway;
     private final PromptUtil promptUtil;
 
     /** 同步生成回复 */
     public AgentResult<String> generateReply(Scene scene, Map<String, String> variables) {
         String prompt = promptUtil.render(scene.template(), variables);
         try {
-            String reply = chatClient.prompt().user(prompt).call().content();
+            String reply = llmGateway.call(LlmRequest.of(AgentRole.CONVERSATION, prompt));
             if (reply == null || reply.isBlank()) {
                 return AgentResult.fail(ErrorCode.AI_MODEL_ERROR, "模型返回空内容");
             }
@@ -61,6 +64,6 @@ public class ConversationAgent {
     /** 流式生成回复（SSE 逐字返回） */
     public Flux<String> streamReply(Scene scene, Map<String, String> variables) {
         String prompt = promptUtil.render(scene.template(), variables);
-        return chatClient.prompt().user(prompt).stream().content();
+        return llmGateway.stream(LlmRequest.of(AgentRole.CONVERSATION, prompt));
     }
 }

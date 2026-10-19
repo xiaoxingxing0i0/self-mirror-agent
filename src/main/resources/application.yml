@@ -37,14 +37,16 @@ spring:
       org.quartz.threadPool.threadCount: 4
 
   ai:
+    model:
+      # 双 chat starter（openai + ollama）共存：关闭 chat 自动装配，由 ChatModelConfig 手动构建
+      # qwenChatModel / ollamaChatModel 两个 bean；embedding 保持 openai 自动装配（固定走 DashScope，
+      # 与 Milvus 1024 维强耦合，严禁切换 provider，否则需全量重建向量 collection）
+      chat: none
+      embedding: openai
     openai:
-      # 默认对接阿里云百炼（通义千问）OpenAI 兼容模式，可替换为任意兼容网关
-      api-key: ${AI_API_KEY:sk-ws-H.PPMRXRL.Rwbq.MEQCIFNQ1Hn2ZimbZlYPr25QTfU0BK00z3ZnHCr9cFqwyUTVAiBF4pBeCySTQxI8gPPKm2CPz6v0men66Xk1JM36q7APsA}
+      # 对接阿里云百炼（通义千问）OpenAI 兼容模式；api-key 只从环境变量注入，不设默认值
+      api-key: ${AI_API_KEY}
       base-url: ${AI_BASE_URL:https://dashscope.aliyuncs.com/compatible-mode}
-      chat:
-        options:
-          model: ${AI_CHAT_MODEL:qwen-plus}
-          temperature: 0.7
       embedding:
         options:
           model: ${AI_EMBEDDING_MODEL:text-embedding-v3}
@@ -86,6 +88,26 @@ resilience4j:
         timeout-duration: 60s
 
 mirror:
+  llm:
+    # 云端：通义千问（DashScope OpenAI 兼容模式）
+    qwen:
+      api-key: ${AI_API_KEY}
+      base-url: ${AI_BASE_URL:https://dashscope.aliyuncs.com/compatible-mode}
+      model: ${AI_CHAT_MODEL:qwen-plus}
+      temperature: 0.7
+    # 本地：Ollama（原生 API）
+    ollama:
+      base-url: ${OLLAMA_BASE_URL:http://localhost:11434}
+      model: ${OLLAMA_MODEL:qwen2.5:7b}
+      temperature: 0.7
+    # 角色 → 主 provider + 降级 provider（none = 不降级）
+    routing:
+      conversation:      { provider: qwen,   fallback: ollama }  # 面向用户，可用性优先
+      compliance:        { provider: qwen,   fallback: none }    # 安全关键链路，禁止降级到本地小模型
+      event:             { provider: qwen,   fallback: none }    # 结构化输出，7b 模型 JSON 稳定性不足
+      language-analysis: { provider: qwen,   fallback: none }    # 同上
+      profile-report:    { provider: qwen,   fallback: ollama }  # 自由文本，可降级
+      temp-summarize:    { provider: ollama, fallback: qwen }    # 重 token 轻质量，优先本地省成本
   milvus:
     host: ${MILVUS_HOST:localhost}
     port: ${MILVUS_PORT:19530}
