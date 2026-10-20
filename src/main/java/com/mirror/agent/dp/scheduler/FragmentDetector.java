@@ -22,8 +22,8 @@ public class FragmentDetector {
             "虽然", "尽管", "以及", "还有", "就是", "不过", "关于", "对于", "或者", "要么",
             "我的", "你的", "他的", "她的", "这个", "那个", "这样", "那样", "其实", "其中", "原因是");
 
-    /** 以连接性标点结尾视为明显碎片（逗号/顿号/分号/冒号，半全角） */
-    private static final String CONNECTOR_TAIL = "，,、；;：:";
+//    /** 以连接性标点结尾视为明显碎片（逗号/顿号/分号/冒号，半全角） */
+//    private static final String CONNECTOR_TAIL = "，,、；;：:";
 
     private final AgentProperties agentProperties;
 
@@ -41,6 +41,6 @@ public class FragmentDetector {
                 return true;
             }
         }
-        return CONNECTOR_TAIL.indexOf(text.charAt(text.length() - 1)) >= 0;
+        return false;
     }
 }

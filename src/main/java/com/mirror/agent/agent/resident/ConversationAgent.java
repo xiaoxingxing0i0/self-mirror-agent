@@ -15,8 +15,8 @@ import java.util.Map;
 
 /**
  * 用户对话 Agent（docs/agent_definition.md §2.3）。
- * 4+1 类场景化 Prompt 模板；人设与角色定义固化在 CONVERSATION 角色的 System Prompt
- * （prompts/system/persona.txt + conversation-agent.txt，经 LlmGateway 统一路由）；
+ * 4+1 类场景化 Prompt 模板；身份/安全底线与聊天风格固化在 CONVERSATION 角色的 System Prompt
+ * （prompts/system/conversation-agent.txt 自包含，经 LlmGateway 统一路由）；
  * 生成结果先返回调度 Agent，经合规校验后再输出给用户；支持 SSE 流式输出。
  */
 @Slf4j

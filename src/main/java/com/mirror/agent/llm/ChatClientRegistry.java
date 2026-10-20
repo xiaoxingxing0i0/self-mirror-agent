@@ -29,7 +29,7 @@ public class ChatClientRegistry {
         return client;
     }
 
-    /** 角色的完整 System Prompt 文本（persona + 角色文件），供网关追加 extraSystem 时重组 */
+    /** 角色的完整 System Prompt 文本（角色文件自包含），供网关追加 extraSystem 时重组 */
     public String systemText(AgentRole role) {
         String text = systemTexts.get(role);
         if (text == null) {

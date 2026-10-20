@@ -17,7 +17,7 @@ public class AgentProperties {
     private int contextMaxRounds = 8;
 
     /** 标签置信度阈值，低于则标记待确认且不写入正式画像库 */
-    private double lowConfidenceThreshold = 0.7;
+    private double lowConfidenceThreshold = 0.8;
 
     /** 合规不通过时最大重生成次数 */
     private int maxRegenerateTimes = 2;

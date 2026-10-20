@@ -24,6 +24,12 @@ public class LlmProperties {
     /** 角色路由表：key = AgentRole.configKey()（如 conversation / temp-summarize） */
     private Map<String, Route> routing = new LinkedHashMap<>();
 
+    /** 模型出入参日志开关（ModelIoLoggingAdvisor：请求文本/回复文本/耗时/token 用量） */
+    private boolean ioLogEnabled = true;
+
+    /** 出入参日志单条文本截断上限（字符），≤0 = 不截断 */
+    private int ioLogMaxChars = 4000;
+
     /** 按角色配置键取路由，缺失 fail-fast（启动期即暴露配置遗漏） */
     public Route routeOf(String configKey) {
         Route route = routing.get(configKey);

@@ -100,6 +100,9 @@ mirror:
       base-url: ${OLLAMA_BASE_URL:http://localhost:11434}
       model: ${OLLAMA_MODEL:qwen2.5:7b}
       temperature: 0.7
+    # 模型出入参日志（ModelIoLoggingAdvisor）：请求文本/回复文本/耗时/token 用量；生产可关
+    io-log-enabled: ${LLM_IO_LOG_ENABLED:true}
+    io-log-max-chars: 4000          # 单条文本截断上限（字符），≤0 = 不截断
     # 角色 → 主 provider + 降级 provider（none = 不降级）
     routing:
       conversation:      { provider: qwen,   fallback: ollama }  # 面向用户，可用性优先
