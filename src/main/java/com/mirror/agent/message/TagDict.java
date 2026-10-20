@@ -4,7 +4,7 @@ import java.util.Map;
 import java.util.Set;
 
 /**
- * 标签数字编码字典（与 prompts/language-analysis.txt 标签字典保持一致的唯一事实源）。
+ * 标签数字编码字典（与 prompts/system/language-analysis-agent.txt 标签字典保持一致的唯一事实源）。
  *
  * <p>编码在模型输出与库表（tag_record.tag_code）中均为字符串形式（如 "13"）。
  * 此处只收敛路由 / 归因需要硬编码比对的编码，展示名由模型输出的 name 字段与前端字典承担。</p>

@@ -22,7 +22,7 @@ public class ConversationContext implements Serializable {
         private int role;
         private String content;
         private LocalDateTime time;
-        /** 关联 message 表 ID（渲染为 [id=..] 供模型回溯归因引用；旧缓存数据为 null 兼容） */
+        /** 关联 message 表 ID（历史兼容字段；情绪挂起队列改为后端状态机归因，不再渲染 [id=..] 供模型回溯指认） */
         private Long messageId;
 
         public ContextMessage() {
@@ -62,7 +62,7 @@ public class ConversationContext implements Serializable {
         appendMessage(role, content, null);
     }
 
-    /** 携带 message 表 ID 的追加（历史渲染带 [id=..]，支撑模型回溯归因） */
+    /** 携带 message 表 ID 的追加（仅溯源保留，不再渲染进提示词） */
     public void appendMessage(int role, String content, Long messageId) {
         recentMessages.add(new ContextMessage(role, content, LocalDateTime.now(), messageId));
         lastActiveTime = LocalDateTime.now();
@@ -85,9 +85,6 @@ public class ConversationContext implements Serializable {
         }
         for (ContextMessage message : recentMessages) {
             builder.append(message.getRole() == 0 ? "用户" : "助手");
-            if (message.getMessageId() != null) {
-                builder.append("[id=").append(message.getMessageId()).append(']');
-            }
             builder.append(": ").append(message.getContent()).append('\n');
         }
         return builder.toString();

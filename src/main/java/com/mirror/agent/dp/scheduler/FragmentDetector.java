@@ -10,7 +10,7 @@ import java.util.Set;
  * 消息完整性判定（并入语言分析方案）：
  * 本类仅保留「明显碎片快速通道」——高置信规则命中即直接归集等待，省掉一次语言分析；
  * 规则不命中的消息一律照常进入标准链路，由语言分析 Agent 结构化输出的 fragment 字段
- * 做全量完整性判定（见 prompts/language-analysis.txt），不产生任何额外模型调用。
+ * 做全量完整性判定（见 prompts/system/language-analysis-agent.txt 规则2），不产生任何额外模型调用。
  */
 @Component
 @RequiredArgsConstructor

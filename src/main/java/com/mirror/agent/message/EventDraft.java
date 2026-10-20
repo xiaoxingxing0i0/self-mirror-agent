@@ -9,8 +9,13 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * 语言分析结构化输出中的单个事件草案（事件抽取与归因，并入 analyze 一次输出）。
- * summaryDraft 语义 = 该事件的「现状摘要」：延续同一事件时由模型合并旧摘要与新信息后整体重写。
+ * 语言分析结构化输出中的单个事件草案（事件抽取，并入 analyze 一次输出）。
+ *
+ * <p>事件链路 v2「事实稳定层」语义：facts 只承载【本条消息贡献的增量原子事实】，
+ * 禁止合并旧信息重写（逐轮重写摘要会漂移）；现状摘要由封稿时对本事件全部
+ * mention.fact_content 归并一次性生成。
+ * 情绪归因不再由模型回溯指认（原 backfillMessageIds 已删），
+ * 先说情绪后说事件的消息由后端挂起队列在事件落库时自动绑定。</p>
  */
 @Data
 public class EventDraft implements Serializable {
@@ -18,17 +23,24 @@ public class EventDraft implements Serializable {
     /** 事件名称（≤15字） */
     private String name;
 
-    /** 事件现状摘要（≤200字） */
-    private String summaryDraft;
+    /** 本条消息贡献的增量原子事实（1-3 条，每条 ≤50 字；NEW 事件即事件现状） */
+    private List<String> facts = new ArrayList<>();
 
     /** 核心要素：time / participants / topic（事件同一性判定依据） */
     private Map<String, Object> coreFacts = new HashMap<>();
 
-    /** 上下文可指认的既有事件 ID（场景2：无需向量检索）；无则 null */
+    /**
+     * 同一性判定动作：NEW 新事件 | CONTINUE 归入已有 open 事件 |
+     * AMBIGUOUS 拿不准先归入（merge-bias，ambiguous 标记落 event_mention，封稿复核可拆分）。
+     * CONTINUATION/REKINDLED 细分由后端 episode 时间规则判定，不由模型给。
+     */
+    private String eventAction;
+
+    /** 归入的既有事件 ID（CONTINUE / AMBIGUOUS 必填，取自注入的【最近提及事件】#id；NEW 为 null） */
     private Long refEventId;
 
-    /** 模型预判提及类型：NEW / CONTINUATION / REKINDLED（最终以后端 episode 时间规则为准） */
-    private String mentionHint;
+    /** 本条消息提及其他「不同事件」的引用关系（对比/因果/单纯提及；同一事件续说不在此，走 eventAction） */
+    private List<ReferencedEvent> referencedEvents = new ArrayList<>();
 
     /** 本事件携带的情绪码（引用 tags 中的 emotion code，可为空=无情绪事件） */
     private List<String> emotionCodes = new ArrayList<>();
@@ -39,13 +51,11 @@ public class EventDraft implements Serializable {
     /** 归因置信度 */
     private double confidence;
 
-    /**
-     * 回溯归因：本事件可解释的历史「先说情绪未说事由」消息 id（只允许引用历史 [id=..] 标记）；
-     * 后端按 user_id + 未归因 + emotion/psychology 三重校验后回填 tag_record.event_id。
-     */
-    private List<Long> backfillMessageIds = new ArrayList<>();
+    public static final String ACTION_NEW = "NEW";
+    public static final String ACTION_CONTINUE = "CONTINUE";
+    public static final String ACTION_AMBIGUOUS = "AMBIGUOUS";
 
-    /** 查重检索用文本：名称 + 核心要素（摘要↔摘要同分布检索） */
+    /** 查重检索用文本：名称 + 核心要素（与摘要解耦，facts 追加不影响检索稳定性） */
     public String queryText() {
         StringBuilder builder = new StringBuilder(name == null ? "" : name);
         if (coreFacts.get("time") != null) {
@@ -58,5 +68,19 @@ public class EventDraft implements Serializable {
             builder.append(' ').append(coreFacts.get("topic"));
         }
         return builder.toString().strip();
+    }
+
+    /** 事件间引用（不同事件）：refEventId 必须是注入列表中的真实 #id */
+    @Data
+    public static class ReferencedEvent implements Serializable {
+
+        /** 被引用的旧事件 ID */
+        private Long refEventId;
+
+        /** 引用类型：comparison 对比 | causal 因果 | mention 单纯提及 */
+        private String refType;
+
+        /** 引用原文片段（≤15字，如「比上次好」） */
+        private String refText;
     }
 }

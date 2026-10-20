@@ -37,6 +37,15 @@ public class EventMention {
     /** 本次携带心理特征码 JSON 数组 */
     private String psychologyCodes;
 
+    /**
+     * 本次提及贡献的增量事实 JSON 数组（稳定层，只追加不改写）。
+     * 现状摘要由封稿时对本事件全部 mention 的 fact_content 归并生成，非本字段承载。
+     */
+    private String factContent;
+
+    /** merge-bias 存疑标记：1=本条为「拿不准先归入」（AMBIGUOUS），待封稿复核，可被拆分 */
+    private Integer ambiguous;
+
     private Double confidence;
 
     private LocalDateTime createTime;
@@ -44,4 +53,7 @@ public class EventMention {
     public static final int TYPE_NEW = 0;
     public static final int TYPE_CONTINUATION = 1;
     public static final int TYPE_REKINDLED = 2;
+
+    public static final int AMBIGUOUS_NO = 0;
+    public static final int AMBIGUOUS_YES = 1;
 }

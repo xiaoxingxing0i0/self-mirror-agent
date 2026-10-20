@@ -63,4 +63,13 @@ public class AgentProperties {
 
     /** 事件查重向量检索 TopK */
     private int eventSearchTopk = 5;
+
+    /** 事实层单事件强制封稿阈值：提及行数达到即立即定稿（防 open 草稿事实无限膨胀） */
+    private int eventSealMaxMentions = 15;
+
+    /** 单用户同时处于 EMERGING 的事件上限：超出强制封稿最活跃最旧的一个 */
+    private int eventMaxOpenDrafts = 3;
+
+    /** 情绪挂起队列窗口（分钟）：事件落库时仅归因该时间窗内未关联事件的情绪/心理标签 */
+    private int emotionPendingWindowMinutes = 15;
 }

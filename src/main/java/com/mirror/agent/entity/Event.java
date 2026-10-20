@@ -10,7 +10,9 @@ import java.time.LocalDateTime;
 
 /**
  * 人生事件表 event（情绪-事件关联，用户级数据）。
- * 事件同一性 =（时段 + 参与者 + 主题）三元组；摘要渐进改写为「现状摘要」，不拼接。
+ * 事件同一性 =（时段 + 参与者 + 主题）三元组。
+ * 摘要为「事实归并的派生缓存」：建档时 bootstrap（名称+初始事实），
+ * 封稿/追加提及后由全部增量事实（event_mention.fact_content）一次性归并生成，中途不逐轮改写（防漂移）。
  */
 @Data
 @TableName("event")
@@ -24,7 +26,7 @@ public class Event {
     /** 事件名称（≤25字短语） */
     private String name;
 
-    /** 事件摘要（≤300字） */
+    /** 事件现状摘要（≤300字，事实归并生成，可重建的派生缓存） */
     private String summary;
 
     /** 状态：0 EMERGING 增量叙述中 1 SETTLED 已定稿 */

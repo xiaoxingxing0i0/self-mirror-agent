@@ -78,7 +78,7 @@ public class AggregationCoordinator {
         ChatResponse response = executeTurn(conversation, userId, request.getContent(),
                 List.of(userMessage.getId()), analysis, context);
         eventResolver.resolveAsync(userId, conversation.getId(),
-                List.of(userMessage.getId()), analysis);
+                List.of(userMessage.getId()), request.getContent(), analysis);
         return response;
     }
 
@@ -111,7 +111,7 @@ public class AggregationCoordinator {
                 messageIds(fragments), analysis, context);
         if (!forcedClarify) {
             eventResolver.resolveAsync(userId, conversation.getId(),
-                    messageIds(fragments), analysis);
+                    messageIds(fragments), merged, analysis);
         }
         return response;
     }
@@ -147,7 +147,7 @@ public class AggregationCoordinator {
             return StreamPreparation.pending(conversation);
         }
         eventResolver.resolveAsync(userId, conversation.getId(),
-                List.of(userMessage.getId()), analysis);
+                List.of(userMessage.getId()), request.getContent(), analysis);
         return routedPreparation(conversation, context, analysis, request.getContent(),
                 userMessage, null, null);
     }
@@ -181,7 +181,7 @@ public class AggregationCoordinator {
         }
         if (!forcedClarify) {
             eventResolver.resolveAsync(userId, conversation.getId(),
-                    messageIds(fragments), analysis);
+                    messageIds(fragments), merged, analysis);
         }
         return routedPreparation(conversation, context, analysis, merged,
                 null, messageIds(fragments), merged);

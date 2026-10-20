@@ -68,7 +68,7 @@ public class IntentRouter {
         }
         return switch (analysis.getPrimaryIntent()) {
             case "consult" -> consultRoute(userId, request, analysis, history);
-            case "query" -> queryRoute(userId, request);
+            case "query" -> queryRoute(userId, request, analysis);
             case "task" -> taskRoute(userId, request, analysis);
             default -> chatRoute(userId, analysis, request, history);
         };
@@ -110,8 +110,12 @@ public class IntentRouter {
         return new RouteOutcome(Scene.COMFORT, vars, "consult", null);
     }
 
-    /** 历史查询分支：个人对话数据检索 → 结果告知 */
-    private RouteOutcome queryRoute(Long userId, ChatRequest request) {
+    /**
+     * 历史查询分支：模型指认的已知事件（queryEventIds，归属复验后）→ 事件档案直检（含时间线
+     * 与引用关系网）；叠加个人对话向量检索兜底（列表外更早事件/未指认场景）。
+     */
+    private RouteOutcome queryRoute(Long userId, ChatRequest request, LanguageAnalysisResult analysis) {
+        String dossier = eventDossier(userId, analysis);
         RetrievalRequest retrievalRequest = RetrievalRequest.builder()
                 .userId(userId)
                 .query(request.getContent())
@@ -119,12 +123,34 @@ public class IntentRouter {
                 .build();
         AgentResult<List<RetrievalItem>> result = invoker.invoke(AgentType.RETRIEVAL,
                 "retrieve_history", () -> retrievalAgent.retrieve(retrievalRequest));
-        String info = result.isSuccess() && result.getData() != null && !result.getData().isEmpty()
-                ? "围绕「" + request.getContent() + "」检索到 " + result.getData().size()
-                        + " 条历史对话：\n" + renderRetrieval(result.getData())
-                : "未检索到与「" + request.getContent() + "」相关的历史对话记录，请引导用户补充时间或主题。";
+        StringBuilder info = new StringBuilder();
+        if (!dossier.isBlank()) {
+            info.append("【事件档案检索结果（结构化档案，优先采信）】\n").append(dossier).append('\n');
+        }
+        if (result.isSuccess() && result.getData() != null && !result.getData().isEmpty()) {
+            info.append("【历史对话记录检索】\n围绕「").append(request.getContent())
+                    .append("」检索到 ").append(result.getData().size())
+                    .append(" 条历史对话：\n").append(renderRetrieval(result.getData()));
+        } else if (dossier.isBlank()) {
+            info.append("未检索到与「").append(request.getContent())
+                    .append("」相关的历史对话记录，请引导用户补充时间或主题。");
+        }
         return new RouteOutcome(Scene.RESULT_NOTIFY,
-                Map.of("resultInfo", info), "query", null);
+                Map.of("resultInfo", info.toString()), "query", null);
+    }
+
+    /** 事件档案直检：queryEventIds 为空/链路关闭/查询异常 → 空串（回落消息向量检索） */
+    private String eventDossier(Long userId, LanguageAnalysisResult analysis) {
+        if (!agentProperties.isEventPipelineEnabled() || userId == null || analysis == null
+                || analysis.getQueryEventIds() == null || analysis.getQueryEventIds().isEmpty()) {
+            return "";
+        }
+        try {
+            return eventService.renderEventDossier(userId, analysis.getQueryEventIds());
+        } catch (Exception e) {
+            log.warn("事件档案检索失败，回落对话记录检索: {}", e.getMessage());
+            return "";
+        }
     }
 
     /** 任务分支：创建报告/统计任务 → 任务通知（scene.md 场景 3） */

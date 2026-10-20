@@ -1,40 +1,9 @@
-对下方用户输入打标并抽取事件，按给定格式仅输出 JSON，无任何其他文本。
-
-## 标签字典（code 必须精确匹配，禁止自造）
-- emotion: happy 开心 | calm 平静 | excited 兴奋 | grateful 感激 | hopeful 期待 | relaxed 放松 | anxious 焦虑 | down 低落 | angry 愤怒 | tired 疲惫 | lonely 孤独 | stressed 压力 | sad 悲伤 | confused 迷茫
-- intent: chat 闲聊 | consult 咨询 | query 查历史 | task 任务
-- psychology（仅证据充分）: internal_attribution 内归因 | external_attribution 外归因 | perfectionism 完美主义 | low_self_esteem 低自尊 | positive_coping 积极应对 | avoidance_coping 回避应对 | catastrophizing 灾难化思维
-- task（仅 intent=task）: daily_report | weekly_report | monthly_report | custom_report | statistic
-
-## 输出格式
-{"tags":[{"category":"emotion","code":"sad","name":"悲伤","confidence":0.9,"needConfirm":false}],
- "summary":"一句话核心内容，越短越好",
- "primaryIntent":"chat|consult|query|task 之一",
- "needClarify":false,"fragment":false,
- "events":[{"name":"≤25字","summaryDraft":"≤300字现状摘要","coreFacts":{"time":"","participants":[],"topic":""},
-
-   "refEventId":null,"mentionHint":"NEW|CONTINUATION|REKINDLED",
-   "emotionCodes":[],"psychologyCodes":[],"confidence":0.85,"backfillMessageIds":[]}]}
-
-## 规则
-1. tags：confidence<0.7→needConfirm=true；emotion≥1、intent 恰 1、psychology 宁缺勿造；严禁诊断性结论；输入过短/语义不明/句子截断→needClarify=true 并降置信。
-2. fragment：句子截断、成分缺失、需用户续说才完整→true（通常 needClarify=true）；能独立理解（可无标点）→false；拿不准→false（及时回复优先于等待）。
-3. events：叙述了具体的事（时间/参与者/主题/经过任一）即输出，≤3 个，一件事一条；无情绪的纯事件也要输出（emotionCodes=[]）；泛化情绪（「最近就是累」）或无事→"events":[]。emotionCodes 只能引用本次 tags 输出的 emotion code。
-4. 同一性：与【最近提及事件】时段+参与者+主题一致→refEventId=该id，mentionHint=CONTINUATION（紧接着聊）/REKINDLED（隔时再提），且 summaryDraft 必须是**合并旧摘要与新信息后重写的现状摘要**（禁止只写本条增量）；新事件→refEventId=null、hint=NEW；拿不准按 NEW（后端有查重兜底）。
-5. backfillMessageIds：历史中「用户[id=N]:」消息只表达了情绪未说事由、而本事件正是其缘由→填 N。只准用历史真实 id；一条情绪消息只归一个最匹配事件；不确定不填；本轮输入自身不填。
-
-## 示例A（新建事件）
-输入：「今天下午同事请我喝了杯奶茶，挺好喝的」
-输出：{"tags":[{"category":"emotion","code":"happy","name":"开心","confidence":0.85,"needConfirm":false},{"category":"intent","code":"chat","name":"日常闲聊","confidence":0.9,"needConfirm":false}],"summary":"同事下午请喝奶茶","primaryIntent":"chat","needClarify":false,"fragment":false,"events":[{"name":"同事请喝奶茶","summaryDraft":"今天下午同事请用户喝了杯奶茶，味道好，用户愉快","coreFacts":{"time":"今天下午","participants":["同事","用户"],"topic":"被请喝奶茶"},"refEventId":null,"mentionHint":"NEW","emotionCodes":["happy"],"psychologyCodes":[],"confidence":0.88,"backfillMessageIds":[]}]}
-
-## 示例B（事件解释历史情绪→回溯归因）
-输入：「今天上班迟到被扣了全勤奖」（历史含：用户[id=101]: 今天好烦啊）
-输出：{"tags":[{"category":"emotion","code":"stressed","name":"压力","confidence":0.85,"needConfirm":false},{"category":"intent","code":"chat","name":"日常闲聊","confidence":0.88,"needConfirm":false}],"summary":"用户迟到被扣全勤奖","primaryIntent":"chat","needClarify":false,"fragment":false,"events":[{"name":"迟到扣全勤","summaryDraft":"今天用户上班迟到，被扣了全勤奖，感到烦躁有压力","coreFacts":{"time":"今天","participants":["用户","公司"],"topic":"迟到被扣全勤奖"},"refEventId":null,"mentionHint":"NEW","emotionCodes":["stressed"],"psychologyCodes":[],"confidence":0.86,"backfillMessageIds":[101]}]}
+请按系统提示词中的标签字典、输出格式与规则，对下方用户输入打标并抽取事件增量事实，仅输出 JSON，无任何其他文本。
 
 ## 最近提及事件
 {{recentEvents}}
 
-## 会话上下文（用户消息带 [id=..] 标记）
+## 会话上下文
 {{history}}
 
 ## 用户输入

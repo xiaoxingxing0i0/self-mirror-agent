@@ -30,6 +30,12 @@ public class LanguageAnalysisResult implements Serializable {
     /** 本轮提及的事件草案（0..N 个；情绪挂各事件对象内；空=无事件，泛化情绪不建事件） */
     private List<EventDraft> events = new ArrayList<>();
 
+    /**
+     * 查询指路：用户在问【最近提及事件】中的已知事件时列出其 #id（query/画像类问题，可多个）。
+     * 只允许列表内真实 id；不在列表或事件不涉及 → 空（IntentRouter 据此决定事件档案直检还是回落消息向量检索）。
+     */
+    private List<Long> queryEventIds = new ArrayList<>();
+
     public List<TagItem> tagsOf(String category) {
         return tags.stream().filter(t -> category.equals(t.getCategory())).toList();
     }

@@ -41,6 +41,7 @@ public class MilvusCollectionSupport {
     private final AtomicBoolean messageReady = new AtomicBoolean(false);
     private final AtomicBoolean knowledgeReady = new AtomicBoolean(false);
     private final AtomicBoolean eventReady = new AtomicBoolean(false);
+    private final AtomicBoolean factReady = new AtomicBoolean(false);
 
     @PostConstruct
     public void init() {
@@ -48,9 +49,33 @@ public class MilvusCollectionSupport {
             ensureMessageCollection();
             ensureKnowledgeCollection();
             ensureEventCollection();
+            ensureFactCollection();
         } catch (Exception e) {
             log.warn("Milvus 集合初始化失败，将在首次使用时重试: {}", e.getMessage());
         }
+    }
+
+    /**
+     * event_fact_vector：主键 fact_id（确定性哈希：hash(eventId, messageId, index)，重试幂等），
+     * 分区键 user_id，冗余 event_id/message_id/content（多路召回按事件取 max 相似度）。
+     */
+    public void ensureFactCollection() {
+        if (factReady.get() || hasCollection(properties.getFactCollection())) {
+            factReady.set(true);
+            return;
+        }
+        CollectionSchemaParam schema = CollectionSchemaParam.newBuilder()
+                .addFieldType(longField("fact_id", true, false))
+                .addFieldType(longField("event_id", false, false))
+                .addFieldType(longField("user_id", false, true))
+                .addFieldType(longField("message_id", false, false))
+                .addFieldType(longField("create_time", false, false))
+                .addFieldType(contentField())
+                .addFieldType(vectorField())
+                .build();
+        createAndLoad(properties.getFactCollection(), schema);
+        factReady.set(true);
+        log.info("Milvus 集合已创建: {}", properties.getFactCollection());
     }
 
     /** event_vector：主键 event_id，分区键 user_id，冗余摘要与活跃时间（查重 rerank 用） */
