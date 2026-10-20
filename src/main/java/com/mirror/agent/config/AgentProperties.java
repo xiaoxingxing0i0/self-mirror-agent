@@ -10,9 +10,6 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 @ConfigurationProperties(prefix = "mirror.agent")
 public class AgentProperties {
 
-    /** 会话上下文 Redis 过期时间（小时） */
-    private int sessionTtlHours = 24;
-
     /** 对话上下文截取最近 N 轮 */
     private int contextMaxRounds = 8;
 

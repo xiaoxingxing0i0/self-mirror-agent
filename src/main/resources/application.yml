@@ -122,7 +122,6 @@ mirror:
     fact-collection: event_fact_vector
     embedding-dim: ${MILVUS_EMBEDDING_DIM:1024}
   agent:
-    session-ttl-hours: 24          # 会话上下文 Redis 过期时间
     context-max-rounds: 8          # 对话上下文截取最近 N 轮
     low-confidence-threshold: 0.7  # 低于该置信度的标签标记为待确认
     max-regenerate-times: 2        # 合规不通过时最大重生成次数

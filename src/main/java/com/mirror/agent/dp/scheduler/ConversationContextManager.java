@@ -7,11 +7,13 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Component;
 
-import java.time.Duration;
 import java.time.LocalDateTime;
 
 /**
- * 会话上下文管理（Redis，24h 过期，docs/agent_implementation.md §3.1）。
+ * 会话上下文管理（Redis，持久存储不过期，docs/agent_implementation.md §3.1）。
+ *
+ * <p>过期语义：不设 TTL（TTL=-1 持久键），会话上下文与快照常驻 Redis；
+ * 内存增长靠轮数 FIFO 截断控制，主动清理走 {@link #evict}。</p>
  *
  * <p>短期记忆定位：键为 用户ID+会话ID 双维度（mirror:ctx:{userId}:{conversationId}），
  * 不同会话分别独立存储；单会话内消息按轮数上限 FIFO 截断（trim 保留最近 N 轮，最旧先丢弃），
@@ -43,17 +45,15 @@ public class ConversationContextManager {
         return context;
     }
 
-    /** 截取最近 N 轮后写回 Redis 并刷新 TTL */
+    /** 截取最近 N 轮后写回 Redis（持久键，不设过期） */
     public void save(ConversationContext context) {
         context.trim(agentProperties.getContextMaxRounds());
-        redisTemplate.opsForValue().set(contextKey(context.getUserId(), context.getConversationId()),
-                context, Duration.ofHours(agentProperties.getSessionTtlHours()));
+        redisTemplate.opsForValue().set(contextKey(context.getUserId(), context.getConversationId()), context);
     }
 
-    /** 执行前留存快照（上一稳定状态） */
+    /** 执行前留存快照（上一稳定状态），持久键不设过期 */
     public void snapshot(ConversationContext context) {
-        redisTemplate.opsForValue().set(snapshotKey(context.getUserId(), context.getConversationId()),
-                context, Duration.ofHours(agentProperties.getSessionTtlHours()));
+        redisTemplate.opsForValue().set(snapshotKey(context.getUserId(), context.getConversationId()), context);
     }
 
     /** 异常时回滚到快照 */
