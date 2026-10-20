@@ -22,12 +22,16 @@ public class MilvusConfig {
 
     @Bean
     public MilvusServiceClient milvusServiceClient() {
-        ConnectParam connectParam = ConnectParam.newBuilder()
+        ConnectParam.Builder builder = ConnectParam.newBuilder()
                 .withHost(milvusProperties.getHost())
                 .withPort(milvusProperties.getPort())
-                .withConnectTimeout(10_000L, TimeUnit.MILLISECONDS)
-                .build();
-        this.milvusServiceClient = new MilvusServiceClient(connectParam);
+                .withConnectTimeout(10_000L, TimeUnit.MILLISECONDS);
+        String password = milvusProperties.getPassword();
+        if (password != null && !password.isBlank()) {
+            // 开启认证的实例：root 用户名 + 密码（mirror.milvus.password 留空 = 匿名连接）
+            builder.withAuthorization(milvusProperties.getUsername(), password);
+        }
+        this.milvusServiceClient = new MilvusServiceClient(builder.build());
         return this.milvusServiceClient;
     }
 

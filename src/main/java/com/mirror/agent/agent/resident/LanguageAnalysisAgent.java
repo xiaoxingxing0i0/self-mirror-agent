@@ -12,6 +12,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -26,6 +27,10 @@ import java.util.Map;
 public class LanguageAnalysisAgent {
 
     private static final String TEMPLATE = "language-analysis.txt";
+
+    /** 意图 code → 展示名（与提示词标签字典/示例一致，intent 对齐补全用） */
+    private static final Map<String, String> INTENT_NAMES = Map.of(
+            "chat", "日常闲聊", "consult", "咨询", "query", "查历史", "task", "任务");
 
     private final LlmGateway llmGateway;
     private final PromptUtil promptUtil;
@@ -61,15 +66,47 @@ public class LanguageAnalysisAgent {
         return AgentResult.ok(result);
     }
 
-    /** 阈值后处理：低置信度 → 待确认；缺省意图 → chat + 待澄清 */
+    /** 阈值后处理：低置信度 → 待确认；intent 与 primaryIntent 一致性对齐 */
     private void postProcess(LanguageAnalysisResult result) {
         double threshold = agentProperties.getLowConfidenceThreshold();
         for (TagItem tag : result.getTags()) {
             tag.setNeedConfirm(tag.getConfidence() < threshold);
         }
-        if (result.getPrimaryIntent() == null || result.getPrimaryIntent().isBlank()) {
-            result.setPrimaryIntent("chat");
-            result.setNeedClarify(true);
+        alignIntent(result);
+    }
+
+    /**
+     * 意图一致性（提示词规则 1「intent 恰一个且与 primaryIntent 一致」的后端兜底）：
+     * 路由字段优先——primaryIntent 非法/缺失时取 tags 中合法 intent 补，两边都不可用
+     * 回落 chat + 待澄清；tags 侧收敛为恰一条并与 primaryIntent 同值，
+     * 防止画像统计（tag_record.intent）与路由（IntentRouter 按 primaryIntent 分支）各信一边。
+     */
+    private void alignIntent(LanguageAnalysisResult result) {
+        List<TagItem> intentTags = result.tagsOf(TagItem.CATEGORY_INTENT);
+        String primary = result.getPrimaryIntent();
+        boolean primaryValid = primary != null && INTENT_NAMES.containsKey(primary);
+        String tagCode = intentTags.isEmpty() ? null : intentTags.get(0).getCode();
+        boolean tagValid = tagCode != null && INTENT_NAMES.containsKey(tagCode);
+        if (!primaryValid) {
+            primary = tagValid ? tagCode : "chat";
+            if (!tagValid) {
+                result.setNeedClarify(true);
+            }
+        }
+        result.setPrimaryIntent(primary);
+
+        for (int i = intentTags.size() - 1; i >= 1; i--) {
+            result.getTags().remove(intentTags.get(i));
+        }
+        if (intentTags.isEmpty()) {
+            result.getTags().add(new TagItem(TagItem.CATEGORY_INTENT, primary,
+                    INTENT_NAMES.get(primary), 0.6, true));
+        } else {
+            TagItem kept = intentTags.get(0);
+            if (!primary.equals(kept.getCode())) {
+                kept.setCode(primary);
+                kept.setName(INTENT_NAMES.get(primary));
+            }
         }
     }
 

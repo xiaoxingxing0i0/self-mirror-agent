@@ -24,7 +24,7 @@
    "emotionCodes":[],"psychologyCodes":[],"confidence":0.85}]}
 
 ## 规则
-1. tags：confidence<0.7→needConfirm=true；emotion≥1、intent 恰 1、psychology 宁缺勿造；严禁诊断性结论；输入过短/语义不明/句子截断→needClarify=true 并降置信。
+1. tags：confidence<0.7→needConfirm=true；emotion 至少 1 个（复合情绪可多）；intent 标签必须有且仅有 1 个，且 code 与 primaryIntent 一致；psychology 宁缺勿造；严禁诊断性结论；输入过短/语义不明/句子截断→needClarify=true 并降置信。
 2. fragment：句子截断、成分缺失、需用户续说才完整→true（通常 needClarify=true）；能独立理解（可无标点）→false；拿不准→false（及时回复优先于等待）。
 3. events：叙述了具体的事（时间/参与者/主题/经过任一）即输出，≤3 个，一件事一条；无情绪的纯事件也要输出（emotionCodes=[]）；泛化情绪（「最近就是累」）或无事→"events":[]。emotionCodes 只能引用本次 tags 输出的 emotion code。只抒发情绪未说事由的消息照常打标但不建事件——后端挂起队列会在事件后续出现时自动把该情绪关联到事件，你不需要做回溯指认。
 4. 同一性与增量事实：与【最近提及事件】时段+参与者+主题一致→eventAction=CONTINUE、refEventId=该 #id（隔了一段时间再提同一件事也 CONTINUE，无需区分首次延续与重提）。参与者/公司/对象不同则同类也算不同事件→NEW（如 #801 面试失败后说「今天面了另一家」→NEW；「面试结果出了，我被拒了」→CONTINUE+refEventId=801）。**看似同一件事但证据不足→eventAction=AMBIGUOUS+refEventId=该 #id（先归入草稿，后端封稿时复核，可拆分）**，不再默认新建。facts 只写【本条消息新增】的原子事实（1~3 条、每条≤50 字，含时间/人物/结果要素），**严禁合并旧信息重写摘要**；归入进行中的事件时以其「最近事实」为对照面，已记录的信息（即使换了措辞）不得重复输出；NEW 事件写本次叙述的事件现状。

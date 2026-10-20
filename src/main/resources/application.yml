@@ -9,7 +9,7 @@ spring:
     driver-class-name: com.mysql.cj.jdbc.Driver
     url: jdbc:mysql://${MYSQL_HOST:localhost}:${MYSQL_PORT:3306}/self_mirror_agent?useUnicode=true&characterEncoding=UTF-8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true
     username: ${MYSQL_USER:root}
-    password: ${MYSQL_PASSWORD:123456}
+    password: ${MYSQL_PASSWORD:xu123456}
     hikari:
       maximum-pool-size: 16
       minimum-idle: 4
@@ -49,7 +49,7 @@ spring:
       base-url: ${AI_BASE_URL:https://dashscope.aliyuncs.com/compatible-mode}
       embedding:
         options:
-          model: ${AI_EMBEDDING_MODEL:text-embedding-v3}
+          model: ${AI_EMBEDDING_MODEL:qwen3.7-text-embedding}
 
   jackson:
     default-property-inclusion: non_null
@@ -111,9 +111,12 @@ mirror:
   milvus:
     host: ${MILVUS_HOST:localhost}
     port: ${MILVUS_PORT:19530}
+    username: ${MILVUS_USERNAME:root}
+    password: ${MILVUS_PASSWORD:Milvus}     # 留空 = 匿名连接（未开启认证的实例）
     message-collection: message_vector
     knowledge-collection: knowledge_vector
     event-collection: event_vector
+    fact-collection: event_fact_vector
     embedding-dim: ${MILVUS_EMBEDDING_DIM:1024}
   agent:
     session-ttl-hours: 24          # 会话上下文 Redis 过期时间

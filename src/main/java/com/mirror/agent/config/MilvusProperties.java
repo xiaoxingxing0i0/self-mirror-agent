@@ -14,6 +14,12 @@ public class MilvusProperties {
 
     private int port = 19530;
 
+    /** 连接用户名（实例开启认证时必填；空=匿名） */
+    private String username = "root";
+
+    /** 连接密码（空=匿名连接，兼容未开启认证的实例） */
+    private String password = "";
+
     /** 对话向量集合 */
     private String messageCollection = "message_vector";
 

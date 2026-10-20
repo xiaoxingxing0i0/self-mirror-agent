@@ -16,6 +16,7 @@ import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.stream.Collectors;
 
 /**
  * 事件摘要向量库封装（event_vector）。
@@ -98,9 +99,12 @@ public class EventVectorRepository {
             return;
         }
         collectionSupport.ensureFactCollection();
+        // int64 主键走 expr 删除（DeleteParam.withPrimaryKeys 仅支持 varchar 主键）
+        String inList = factIds.stream().map(String::valueOf)
+                .collect(Collectors.joining(", "));
         R<?> response = client.delete(DeleteParam.newBuilder()
                 .withCollectionName(properties.getFactCollection())
-                .withPrimaryKeys(factIds.stream().map(String::valueOf).toList())
+                .withExpr("fact_id in [" + inList + "]")
                 .build());
         if (response.getStatus() != R.Status.Success.getCode()) {
             throw new BizException(ErrorCode.MILVUS_ERROR, "事实向量删除失败: " + response.getMessage());
