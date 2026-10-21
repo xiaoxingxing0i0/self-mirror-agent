@@ -4,6 +4,9 @@ server:
 spring:
   application:
     name: self-mirror-agent
+  autoconfigure:
+    exclude:
+      - org.springframework.boot.autoconfigure.freemarker.FreeMarkerAutoConfiguration
 
   datasource:
     driver-class-name: com.mysql.cj.jdbc.Driver
@@ -141,6 +144,12 @@ mirror:
   compliance:
     word-dict-path: classpath:compliance/sensitive-words.txt
     risk-log-enabled: true
+  report:                                  # PDF 报告模块（JSON 契约 → FreeMarker → openhtmltopdf）
+    default-template: report               # 模板：classpath:/templates/{id}.ftl
+    date-format: yyyy-MM-dd HH:mm:ss       # generatedAt 展示格式
+    time-zone: Asia/Shanghai               # generatedAt 格式化时区
+    font-classpath: fonts/NotoSansSC-VF.ttf  # 内嵌中文字体（classpath 相对路径，Noto Sans SC 可变字体，OFL）
+    font-family: Noto Sans CJK SC          # 字体注册名，必须与模板 CSS font-family 一致
 
 logging:
   level:

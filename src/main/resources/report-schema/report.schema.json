@@ -1,0 +1,69 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mirror.agent/schemas/report.schema.json",
+  "title": "Report Contract",
+  "description": "PDF 报告契约：报告元信息 + 摘要 + 章节列表（heading + rows[label,value,status]）",
+  "type": "object",
+  "required": ["reportId", "title", "generatedAt"],
+  "additionalProperties": false,
+  "properties": {
+    "reportId": {
+      "type": "string",
+      "minLength": 1,
+      "description": "报告唯一标识"
+    },
+    "title": {
+      "type": "string",
+      "minLength": 1,
+      "description": "报告标题"
+    },
+    "generatedAt": {
+      "type": "string",
+      "format": "date-time",
+      "description": "生成时间，ISO 8601（必须带时区，如 2026-10-21T10:00:00Z 或 +08:00）"
+    },
+    "summary": {
+      "type": ["string", "null"],
+      "description": "核心摘要，可为 null"
+    },
+    "sections": {
+      "type": ["array", "null"],
+      "description": "章节列表，可为 null 或空数组（渲染层输出占位内容）",
+      "items": {
+        "type": "object",
+        "required": ["heading"],
+        "additionalProperties": false,
+        "properties": {
+          "heading": {
+            "type": "string",
+            "minLength": 1,
+            "description": "章节标题"
+          },
+          "rows": {
+            "type": ["array", "null"],
+            "description": "数据行，可为 null 或空数组（渲染层输出占位内容）",
+            "items": {
+              "type": "object",
+              "required": ["label"],
+              "additionalProperties": false,
+              "properties": {
+                "label": {
+                  "type": "string",
+                  "description": "指标名"
+                },
+                "value": {
+                  "type": ["string", "null"],
+                  "description": "指标值，null 归一为空串"
+                },
+                "status": {
+                  "enum": ["OK", "WARN", "CRITICAL", null],
+                  "description": "状态枚举：OK=正常 / WARN=注意 / CRITICAL=严重，可为 null"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

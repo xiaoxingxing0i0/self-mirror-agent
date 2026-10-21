@@ -37,6 +37,7 @@ public enum ErrorCode {
     COMPLIANCE_HIGH_RISK("206003", "识别到高危风险，已触发正向干预"),
     PROFILE_DATA_INSUFFICIENT("207001", "历史数据不足，结论仅供参考"),
     REPORT_GENERATE_FAILED("207002", "报告生成失败"),
+    REPORT_CONTRACT_VIOLATION("207003", "报告契约校验未通过"),
 
     /* ---------- 3 权限认证错误 ---------- */
     UNAUTHORIZED("300001", "未登录或令牌已失效"),

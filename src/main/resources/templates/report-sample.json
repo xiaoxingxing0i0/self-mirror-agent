@@ -1,0 +1,28 @@
+{
+  "reportId": "r-demo-202610",
+  "title": "十月自我镜像分析报告",
+  "generatedAt": "2026-10-21T10:00:00+08:00",
+  "summary": "本月整体情绪平稳，工作日压力信号偏高；睡眠相关表述出现频率上升，建议关注。",
+  "sections": [
+    {
+      "heading": "情绪分布",
+      "rows": [
+        { "label": "焦虑占比", "value": "32%", "status": "WARN" },
+        { "label": "平静占比", "value": "41%", "status": "OK" },
+        { "label": "低落占比", "value": "12%", "status": "CRITICAL" },
+        { "label": "兴奋占比", "value": "15%", "status": null }
+      ]
+    },
+    {
+      "heading": "沟通模式",
+      "rows": [
+        { "label": "日均对话轮次", "value": "18.4", "status": "OK" },
+        { "label": "深夜对话次数", "value": "9", "status": "WARN" }
+      ]
+    },
+    {
+      "heading": "待观察项",
+      "rows": []
+    }
+  ]
+}
