@@ -46,4 +46,25 @@ public class FileGenerationTool {
             throw new BizException(ErrorCode.SYSTEM_ERROR, "文件生成失败: " + fileName, e);
         }
     }
+
+    /**
+     * 将二进制内容写入输出目录（PDF 等），返回绝对路径；语义同 {@link #writeText}。
+     *
+     * @param fileName 文件名（不允许路径穿越）
+     * @param content  字节内容
+     */
+    public String writeBytes(String fileName, byte[] content) {
+        Path target = outputDir.resolve(fileName).normalize();
+        if (!target.startsWith(outputDir)) {
+            throw new BizException(ErrorCode.PARAM_INVALID, "非法文件名: " + fileName);
+        }
+        try {
+            Files.createDirectories(target.getParent());
+            Files.write(target, content);
+            log.info("二进制文件已生成: {} ({} bytes)", target, content.length);
+            return target.toString();
+        } catch (IOException e) {
+            throw new BizException(ErrorCode.SYSTEM_ERROR, "文件生成失败: " + fileName, e);
+        }
+    }
 }

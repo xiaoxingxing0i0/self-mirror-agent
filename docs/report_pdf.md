@@ -15,6 +15,19 @@ Agent 服务的确定性 Tool:输入符合 JSON Schema 的报告契约 + 模板 
 入口:`report/ReportPdfTool#render(String contractJson, String templateId) → byte[]`
 (另有 `renderTo(..., OutputStream)` 流式变体;templateId 传 null 用默认模板)。
 
+## Agent 工具接入(@Tool)
+
+`report/ReportPdfAgentTool` 以 Spring AI `@Tool(name="generate_report_pdf")` 暴露给模型:
+
+- 入参仅 `contractJson`(必填)+ `templateId`(可选),不暴露内部 DTO/Map;
+- **异常永不穿透 Agent 循环**:统一返回 JSON 字符串 `ReportPdfToolResult`
+  ——成功 `{success,downloadPath,pdfBytes}`(PDF 落盘 `mirror.file.output-dir`,文件名对契约内容确定;
+  不返回 base64,避免大字节串进模型上下文),
+  失败 `{success:false,errorCode,message}`:`207003` 契约违规(message 含全部字段路径,可指导模型修正重试)、
+  `100001` 模板 ID 非法、`207002` 模板不存在/渲染失败、`500001` 系统异常;
+- Agent 侧注册:`MethodToolCallbackProvider.builder().toolObjects(reportPdfAgentTool).build().getToolCallbacks()`
+  注入 ChatClient(项目当前无统一 tool registry,由需要该能力的 Agent 自行装配)。
+
 ## 错误语义
 
 统一走现有 `BizException`/`ErrorCode` 体系(GlobalExceptionHandler 零改动兜底):
