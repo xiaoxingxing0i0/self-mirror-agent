@@ -19,13 +19,13 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 /**
- * 事件摘要向量库封装（event_vector）。
- * 检索强制携带 user_id 过滤，严格实现用户数据隔离；摘要渐进更新经 upsert 保持单事件单向量。
+ * 事由摘要向量库封装（incident_vector）。
+ * 检索强制携带 user_id 过滤，严格实现用户数据隔离；摘要渐进更新经 upsert 保持单事由单向量。
  */
 @Slf4j
 @Repository
 @RequiredArgsConstructor
-public class EventVectorRepository {
+public class IncidentVectorRepository {
 
     private static final List<String> OUTPUT_FIELDS =
             List.of("user_id", "last_active_time", "content");
@@ -34,42 +34,51 @@ public class EventVectorRepository {
     private final MilvusProperties properties;
     private final MilvusCollectionSupport collectionSupport;
 
-    /** 写入/覆盖事件摘要向量（event_id 为主键，重复写入即更新） */
-    public void upsertEventVector(Long eventId, Long userId, LocalDateTime lastActiveTime,
-                                  String summary, float[] embedding) {
-        collectionSupport.ensureEventCollection();
+    /**
+     * 写入/覆盖事由摘要向量（incident_id 为主键，重复写入即更新）。
+     *
+     * @param sceneCategory 场景分类标签（可 null → 空串）；旧版 schema 集合缺该字段时自动跳过，
+     *                      保证摘要向量主链路可用（见 {@link MilvusCollectionSupport#incidentSupportsScene()}）
+     */
+    public void upsertIncidentVector(Long incidentId, Long userId, LocalDateTime lastActiveTime,
+                                  String summary, float[] embedding, String sceneCategory) {
+        collectionSupport.ensureIncidentCollection();
         long epochSecond = lastActiveTime.atZone(ZoneId.systemDefault()).toEpochSecond();
-        List<InsertParam.Field> fields = List.of(
-                new InsertParam.Field("event_id", List.of(eventId)),
+        List<InsertParam.Field> fields = new ArrayList<>(List.of(
+                new InsertParam.Field("incident_id", List.of(incidentId)),
                 new InsertParam.Field("user_id", List.of(userId)),
                 new InsertParam.Field("last_active_time", List.of(epochSecond)),
                 new InsertParam.Field("content", List.of(truncate(summary))),
-                new InsertParam.Field("embedding", List.of(toFloatList(embedding))));
+                new InsertParam.Field("embedding", List.of(toFloatList(embedding)))));
+        if (collectionSupport.incidentSupportsScene()) {
+            fields.add(new InsertParam.Field("scene_category",
+                    List.of(sceneCategory == null ? "" : sceneCategory)));
+        }
         R<?> response = client.upsert(UpsertParam.newBuilder()
-                .withCollectionName(properties.getEventCollection())
+                .withCollectionName(properties.getIncidentCollection())
                 .withFields(fields)
                 .build());
         if (response.getStatus() != R.Status.Success.getCode()) {
-            throw new BizException(ErrorCode.MILVUS_ERROR, "事件向量写入失败: " + response.getMessage());
+            throw new BizException(ErrorCode.MILVUS_ERROR, "事由向量写入失败: " + response.getMessage());
         }
-        log.debug("事件摘要向量已写入 Milvus: eventId={}", eventId);
+        log.debug("事由摘要向量已写入 Milvus: incidentId={}", incidentId);
     }
 
-    /** 按用户检索相似事件摘要 TopK（事件查重/旧事重提定锚） */
+    /** 按用户检索相似事由摘要 TopK（事由查重/旧事重提定锚） */
     public List<VectorHit> searchByUser(Long userId, float[] queryVector, int topK) {
-        collectionSupport.ensureEventCollection();
+        collectionSupport.ensureIncidentCollection();
         String expr = "user_id == " + userId;
-        return collectionSupport.search(properties.getEventCollection(),
+        return collectionSupport.search(properties.getIncidentCollection(),
                 toFloatList(queryVector), topK, expr, OUTPUT_FIELDS);
     }
 
     /** 写入/覆盖单条增量事实向量（fact_id 确定性主键，重复写入即更新，重试幂等） */
-    public void upsertFactVector(long factId, long eventId, long userId, long messageId,
+    public void upsertFactVector(long factId, long incidentId, long userId, long messageId,
                                  LocalDateTime createTime, String content, float[] embedding) {
         collectionSupport.ensureFactCollection();
         List<InsertParam.Field> fields = List.of(
                 new InsertParam.Field("fact_id", List.of(factId)),
-                new InsertParam.Field("event_id", List.of(eventId)),
+                new InsertParam.Field("incident_id", List.of(incidentId)),
                 new InsertParam.Field("user_id", List.of(userId)),
                 new InsertParam.Field("message_id", List.of(messageId)),
                 new InsertParam.Field("create_time", List.of(
@@ -85,12 +94,12 @@ public class EventVectorRepository {
         }
     }
 
-    /** 按用户检索相似事实 TopK（查重多路召回；命中经 fields.event_id 归并到事件） */
+    /** 按用户检索相似事实 TopK（查重多路召回；命中经 fields.incident_id 归并到事由） */
     public List<VectorHit> searchFactsByUser(Long userId, float[] queryVector, int topK) {
         collectionSupport.ensureFactCollection();
         String expr = "user_id == " + userId;
         return collectionSupport.search(properties.getFactCollection(),
-                toFloatList(queryVector), topK, expr, List.of("event_id", "user_id", "content"));
+                toFloatList(queryVector), topK, expr, List.of("incident_id", "user_id", "content"));
     }
 
     /** 按确定性主键删除事实向量（拆分通道迁移旧归属行） */
@@ -111,9 +120,9 @@ public class EventVectorRepository {
         }
     }
 
-    /** fact_id 确定性主键：hash(eventId, messageId, index)——重试幂等、拆分可复算 */
-    public static long factVectorId(long eventId, long messageId, int index) {
-        long hash = eventId;
+    /** fact_id 确定性主键：hash(incidentId, messageId, index)——重试幂等、拆分可复算 */
+    public static long factVectorId(long incidentId, long messageId, int index) {
+        long hash = incidentId;
         hash = hash * 1000003L ^ messageId;
         hash = hash * 31L + index;
         return hash & Long.MAX_VALUE;

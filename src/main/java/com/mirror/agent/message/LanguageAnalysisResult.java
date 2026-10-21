@@ -27,14 +27,14 @@ public class LanguageAnalysisResult implements Serializable {
     /** 输入句子中途截断、需等用户续说才能完整理解（碎片归集判定信号） */
     private boolean fragment;
 
-    /** 本轮提及的事件草案（0..N 个；情绪挂各事件对象内；空=无事件，泛化情绪不建事件） */
-    private List<EventDraft> events = new ArrayList<>();
+    /** 本轮提及的事由草案（0..N 个；情绪挂各事由对象内；空=无事由，泛化情绪不建事由） */
+    private List<IncidentDraft> incidents = new ArrayList<>();
 
     /**
-     * 查询指路：用户在问【最近提及事件】中的已知事件时列出其 #id（query/画像类问题，可多个）。
-     * 只允许列表内真实 id；不在列表或事件不涉及 → 空（IntentRouter 据此决定事件档案直检还是回落消息向量检索）。
+     * 查询指路：用户在问【最近提及事由】中的已知事由时列出其 #id（query/画像类问题，可多个）。
+     * 只允许列表内真实 id；不在列表或事由不涉及 → 空（IntentRouter 据此决定事由档案直检还是回落消息向量检索）。
      */
-    private List<Long> queryEventIds = new ArrayList<>();
+    private List<Long> queryIncidentIds = new ArrayList<>();
 
     public List<TagItem> tagsOf(String category) {
         return tags.stream().filter(t -> category.equals(t.getCategory())).toList();

@@ -8,25 +8,25 @@ import lombok.Data;
 import java.time.LocalDateTime;
 
 /**
- * 事件间引用关系边 event_relation（事件链路 v2）。
- * 只承载「不同事件」的引用（对比/因果/单纯提及）；
- * 同一事件的延续与重提走 event_mention（CONTINUATION/REKINDLED），不进本表。
- * 双向可查：正向按 event_id 看本事件引用了谁，反向按 ref_event_id 看谁引用了本事件。
+ * 事由间引用关系边 incident_relation（事由链路 v2）。
+ * 只承载「不同事由」的引用（对比/因果/单纯提及）；
+ * 同一事由的延续与重提走 incident_mention（CONTINUATION/REKINDLED），不进本表。
+ * 双向可查：正向按 incident_id 看本事由引用了谁，反向按 ref_event_id 看谁引用了本事由。
  */
 @Data
-@TableName("event_relation")
-public class EventRelation {
+@TableName("incident_relation")
+public class IncidentRelation {
 
     @TableId(type = IdType.ASSIGN_ID)
     private Long id;
 
-    /** 主动引用方事件 ID */
-    private Long eventId;
+    /** 主动引用方事由 ID */
+    private Long incidentId;
 
-    /** 被引用的旧事件 ID */
-    private Long refEventId;
+    /** 被引用的旧事由 ID */
+    private Long refIncidentId;
 
-    /** 归属用户 ID（与事件同维度隔离） */
+    /** 归属用户 ID（与事由同维度隔离） */
     private Long userId;
 
     /** 引用类型：comparison 对比 | causal 因果 | mention 单纯提及 */

@@ -41,14 +41,14 @@ public class LanguageAnalysisAgent {
     }
 
     /**
-     * 语言分析 + 事件抽取（单次结构化输出）。
+     * 语言分析 + 事由抽取（单次结构化输出）。
      *
-     * @param eventRefs 最近提及事件注入（事件同一性指认依据，场景 2 的数据来源；可空）
+     * @param incidentRefs 最近提及事由注入（事由同一性指认依据，场景 2 的数据来源；可空）
      */
-    public AgentResult<LanguageAnalysisResult> analyze(String input, String history, String eventRefs) {
+    public AgentResult<LanguageAnalysisResult> analyze(String input, String history, String incidentRefs) {
         String prompt = promptUtil.render(TEMPLATE, Map.of(
                 "history", history == null || history.isBlank() ? "（无历史对话）" : history,
-                "recentEvents", eventRefs == null || eventRefs.isBlank() ? "（无最近提及事件）" : eventRefs,
+                "recentIncidents", incidentRefs == null || incidentRefs.isBlank() ? "（无最近提及事由）" : incidentRefs,
                 "input", input));
         LanguageAnalysisResult result;
         try {

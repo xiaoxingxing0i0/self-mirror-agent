@@ -8,18 +8,18 @@ import lombok.Data;
 import java.time.LocalDateTime;
 
 /**
- * 事件提及明细 event_mention。
- * 「重提次数/时间点」= mention_type=REKINDLED 的行；「事件情绪次数」= emotion_codes 聚合。
+ * 事由提及明细 incident_mention。
+ * 「重提次数/时间点」= mention_type=REKINDLED 的行；「事由情绪次数」= emotion_codes 聚合。
  * conversation_id 仅溯源用（当前产品形态一人一会话），不参与任何逻辑分支。
  */
 @Data
-@TableName("event_mention")
-public class EventMention {
+@TableName("incident_mention")
+public class IncidentMention {
 
     @TableId(type = IdType.ASSIGN_ID)
     private Long id;
 
-    private Long eventId;
+    private Long incidentId;
 
     private Long userId;
 
@@ -31,7 +31,7 @@ public class EventMention {
     /** 0 NEW 1 CONTINUATION 2 REKINDLED */
     private Integer mentionType;
 
-    /** 本次携带情绪码 JSON 数组（可为空=无情绪事件） */
+    /** 本次携带情绪码 JSON 数组（可为空=无情绪事由） */
     private String emotionCodes;
 
     /** 本次携带心理特征码 JSON 数组 */
@@ -39,7 +39,7 @@ public class EventMention {
 
     /**
      * 本次提及贡献的增量事实 JSON 数组（稳定层，只追加不改写）。
-     * 现状摘要由封稿时对本事件全部 mention 的 fact_content 归并生成，非本字段承载。
+     * 现状摘要由封稿时对本事由全部 mention 的 fact_content 归并生成，非本字段承载。
      */
     private String factContent;
 

@@ -41,13 +41,13 @@ class PromptUtilTest {
     @DisplayName("language-analysis.txt：静态规则已迁往 system 文件，user 模板仅保留动态注入段")
     void renderLanguageAnalysis() {
         String rendered = promptUtil.render("language-analysis.txt",
-                Map.of("history", "（无历史对话）", "recentEvents", "（无最近提及事件）", "input", "今天好累"));
+                Map.of("history", "（无历史对话）", "recentIncidents", "（无最近提及事由）", "input", "今天好累"));
 
         assertThat(rendered).doesNotContain("你是语言分析引擎");       // 角色句已迁往 system 文件
         assertThat(rendered).doesNotContain("## 标签字典").doesNotContain("## 示例A"); // 字典/格式/规则/示例已迁往 system 文件
         // 段落标题与 system 文件规则4/5 的交叉引用保持一致，改动需两侧同步
-        assertThat(rendered).contains("## 最近提及事件").contains("## 会话上下文").contains("## 用户输入");
-        assertThat(rendered).contains("（无最近提及事件）").contains("（无历史对话）").contains("今天好累");
+        assertThat(rendered).contains("## 最近提及事由").contains("## 会话上下文").contains("## 用户输入");
+        assertThat(rendered).contains("（无最近提及事由）").contains("（无历史对话）").contains("今天好累");
         assertThat(rendered).doesNotContain("{{");
     }
 
@@ -56,7 +56,7 @@ class PromptUtilTest {
     void renderChatComfort() {
         String rendered = promptUtil.render("chat-comfort.txt",
                 Map.of("emotionTags", "sad", "retrievalContext", "（无）",
-                        "history", "（无历史对话）", "recentEvents", "（无）", "input", "我很难过"));
+                        "history", "（无历史对话）", "recentIncidents", "（无）", "input", "我很难过"));
 
         assertThat(rendered).contains("场景：情绪安抚").contains("我很难过");
         assertThat(rendered).doesNotContain("{{");

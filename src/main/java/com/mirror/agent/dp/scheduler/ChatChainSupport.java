@@ -17,7 +17,7 @@ import com.mirror.agent.message.ComplianceResult.ViolationLevel;
 import com.mirror.agent.message.LanguageAnalysisResult;
 import com.mirror.agent.message.TagItem;
 import com.mirror.agent.service.ConversationService;
-import com.mirror.agent.service.EventService;
+import com.mirror.agent.service.IncidentService;
 import com.mirror.agent.service.TagService;
 import com.mirror.agent.service.VectorArchiveService;
 import lombok.RequiredArgsConstructor;
@@ -44,7 +44,7 @@ public class ChatChainSupport {
     private final ConversationService conversationService;
     private final TagService tagService;
     private final VectorArchiveService vectorArchiveService;
-    private final EventService eventService;
+    private final IncidentService incidentService;
     private final AgentProperties agentProperties;
 
     /** 输入合规检查 */
@@ -63,12 +63,12 @@ public class ChatChainSupport {
                 ? checkResult.getInterceptedReply() : ComplianceAgent.MODERATE_FALLBACK;
     }
 
-    /** 语言分析 + 事件抽取（失败时由 Agent 内部降级为待澄清闲聊；熔断时调度层兜底） */
+    /** 语言分析 + 事由抽取（失败时由 Agent 内部降级为待澄清闲聊；熔断时调度层兜底） */
     public LanguageAnalysisResult analyze(String content, ConversationContext context) {
-        String eventRefs = renderRecentEventRefs(context.getUserId());
+        String incidentRefs = renderRecentIncidentRefs(context.getUserId());
         AgentResult<LanguageAnalysisResult> result = invoker.invoke(AgentType.LANGUAGE_ANALYSIS,
                 "analyze", () -> languageAnalysisAgent.analyze(
-                        content, context.renderHistory(), eventRefs));
+                        content, context.renderHistory(), incidentRefs));
         if (result.getData() != null) {
             return result.getData();
         }
@@ -80,15 +80,15 @@ public class ChatChainSupport {
         return fallback;
     }
 
-    /** 最近提及事件注入（场景 2 上下文指认依据）；开关关闭或查询失败返回空串，不影响主链路 */
-    private String renderRecentEventRefs(Long userId) {
-        if (!agentProperties.isEventPipelineEnabled() || userId == null) {
+    /** 最近提及事由注入（场景 2 上下文指认依据）；开关关闭或查询失败返回空串，不影响主链路 */
+    private String renderRecentIncidentRefs(Long userId) {
+        if (!agentProperties.isIncidentPipelineEnabled() || userId == null) {
             return "";
         }
         try {
-            return eventService.renderRecentEventRefs(userId);
+            return incidentService.renderRecentIncidentRefs(userId);
         } catch (Exception e) {
-            log.warn("最近事件上下文获取失败，跳过注入: {}", e.getMessage());
+            log.warn("最近事由上下文获取失败，跳过注入: {}", e.getMessage());
             return "";
         }
     }
@@ -123,8 +123,8 @@ public class ChatChainSupport {
 
     /**
      * 全量归档：本轮全部来源消息打标（碎片合并轮逐碎片溯源）+ 上下文回写 Redis。
-     * 日常闲聊（Scene.DAILY）不写 tag_record：无画像/事件价值，避免稀释统计；
-     * 安抚/咨询/澄清/任务分支照常落标。tag 的事件归因（event_id）由事件链路异步回填。
+     * 日常闲聊（Scene.DAILY）不写 tag_record：无画像/事由价值，避免稀释统计；
+     * 安抚/咨询/澄清/任务分支照常落标。tag 的事由归因（incident_id）由事由链路异步回填。
      *
      * @param sourceMessageIds 本轮输入对应的用户消息 ID 集（普通轮单条、合并轮多条）
      * @param userTurnText     写入上下文的用户轮文本（合并轮为合并后全文）

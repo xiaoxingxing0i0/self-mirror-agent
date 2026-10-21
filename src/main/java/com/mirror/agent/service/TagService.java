@@ -62,42 +62,42 @@ public class TagService {
     }
 
     /**
-     * 本轮消息的事件归因回填：仅更新指定消息中命中这些标签码且尚未归因的行。
-     * user_id 条件保证跨用户 id 伪造无效；event_id IS NULL 保证不覆盖已归因行。
+     * 本轮消息的事由归因回填：仅更新指定消息中命中这些标签码且尚未归因的行。
+     * user_id 条件保证跨用户 id 伪造无效；incident_id IS NULL 保证不覆盖已归因行。
      */
-    public int fillTagsByCodes(Long userId, List<Long> messageIds, Long eventId, List<String> tagCodes) {
+    public int fillTagsByCodes(Long userId, List<Long> messageIds, Long incidentId, List<String> tagCodes) {
         if (messageIds == null || messageIds.isEmpty() || tagCodes == null || tagCodes.isEmpty()) {
             return 0;
         }
         return tagRecordMapper.update(null, Wrappers.<TagRecord>lambdaUpdate()
-                .set(TagRecord::getEventId, eventId)
+                .set(TagRecord::getIncidentId, incidentId)
                 .eq(TagRecord::getUserId, userId)
                 .in(TagRecord::getMessageId, messageIds)
                 .in(TagRecord::getTagCode, tagCodes)
-                .isNull(TagRecord::getEventId));
+                .isNull(TagRecord::getIncidentId));
     }
 
     /**
-     * 情绪挂起队列绑定（事件链路 v2，替代模型回溯指认）：
-     * 事件落库时，把时间窗口内「只说情绪未说事由」的未归因标签行关联到本事件。
+     * 情绪挂起队列绑定（事由链路 v2，替代模型回溯指认）：
+     * 事由落库时，把时间窗口内「只说情绪未说事由」的未归因标签行关联到本事由。
      * 绑定规则（确定性，零模型调用）：
-     * ① 情绪码与本事件携带码有交集的行 → 绑定；
-     * ② 无交集 → 仅绑定「最近且最强」的一条（时间+置信度排序首位），其余留在队列待后续事件或过期；
+     * ① 情绪码与本事由携带码有交集的行 → 绑定；
+     * ② 无交集 → 仅绑定「最近且最强」的一条（时间+置信度排序首位），其余留在队列待后续事由或过期；
      * ③ 本轮消息已按码归因（fillTagsByCodes），通过 excludeMessageIds 排除，不重复处理。
-     * 过期未绑定 = 超出窗口仍未归因的行，天然可查（event_id IS NULL），无需转储。
+     * 过期未绑定 = 超出窗口仍未归因的行，天然可查（incident_id IS NULL），无需转储。
      *
      * @return 本次绑定的标签行数
      */
-    public int bindPendingEmotions(Long userId, Long eventId, List<String> eventTagCodes,
+    public int bindPendingEmotions(Long userId, Long incidentId, List<String> incidentTagCodes,
                                    List<Long> excludeMessageIds, int windowMinutes) {
-        if (userId == null || eventId == null) {
+        if (userId == null || incidentId == null) {
             return 0;
         }
         List<TagRecord> candidates = tagRecordMapper.selectList(Wrappers.<TagRecord>lambdaQuery()
                 .eq(TagRecord::getUserId, userId)
                 .in(TagRecord::getTagCategory,
                         List.of(TagItem.CATEGORY_EMOTION, TagItem.CATEGORY_PSYCHOLOGY))
-                .isNull(TagRecord::getEventId)
+                .isNull(TagRecord::getIncidentId)
                 .ge(TagRecord::getCreateTime, LocalDateTime.now().minusMinutes(windowMinutes))
                 .notIn(excludeMessageIds != null && !excludeMessageIds.isEmpty(),
                         TagRecord::getMessageId, excludeMessageIds == null ? List.of() : excludeMessageIds)
@@ -107,7 +107,7 @@ public class TagService {
             return 0;
         }
         Set<String> codes = new HashSet<>(
-                eventTagCodes == null ? List.of() : eventTagCodes);
+                incidentTagCodes == null ? List.of() : incidentTagCodes);
         List<Long> toBind = new ArrayList<>();
         for (TagRecord candidate : candidates) {
             if (codes.contains(candidate.getTagCode())) {
@@ -115,24 +115,24 @@ public class TagService {
             }
         }
         if (toBind.isEmpty() && !codes.isEmpty()) {
-            // 事件携带情绪码但无交集：绑定「最近且最强」一条（列表已按时间+置信度倒序）
+            // 事由携带情绪码但无交集：绑定「最近且最强」一条（列表已按时间+置信度倒序）
             toBind.add(candidates.get(0).getId());
         } else if (toBind.isEmpty() && candidates.size() == 1) {
-            // 无情绪纯事件：仅当队列只有唯一 pending 时直绑（多条挂起不猜归属）
+            // 无情绪纯事由：仅当队列只有唯一 pending 时直绑（多条挂起不猜归属）
             toBind.add(candidates.get(0).getId());
         }
         if (toBind.isEmpty()) {
             return 0;
         }
         tagRecordMapper.update(null, Wrappers.<TagRecord>lambdaUpdate()
-                .set(TagRecord::getEventId, eventId)
+                .set(TagRecord::getIncidentId, incidentId)
                 .in(TagRecord::getId, toBind));
         return toBind.size();
     }
 
     /**
      * 窗口内仍未归因的情绪标签名（封稿时的 pre_event_emotion 提示素材：
-     * 「用户描述本事件前曾表达X，可能相关但未确认」，仅谨慎提及不断言因果）。
+     * 「用户描述本事由前曾表达X，可能相关但未确认」，仅谨慎提及不断言因果）。
      */
     public List<String> listPendingEmotionNames(Long userId, LocalDateTime from, LocalDateTime to) {
         if (userId == null || from == null || to == null || !to.isAfter(from)) {
@@ -141,37 +141,37 @@ public class TagService {
         List<TagRecord> rows = tagRecordMapper.selectList(Wrappers.<TagRecord>lambdaQuery()
                 .eq(TagRecord::getUserId, userId)
                 .eq(TagRecord::getTagCategory, TagItem.CATEGORY_EMOTION)
-                .isNull(TagRecord::getEventId)
+                .isNull(TagRecord::getIncidentId)
                 .between(TagRecord::getCreateTime, from, to));
         return rows.stream().map(TagRecord::getTagName).distinct().toList();
     }
 
-    /** 拆分通道连带迁移：指定消息上归因到源事件的标签行改挂到拆出的新事件 */
-    public int reattributeTagsToEvent(Long userId, Long fromEventId, Long toEventId,
+    /** 拆分通道连带迁移：指定消息上归因到源事由的标签行改挂到拆出的新事由 */
+    public int reattributeTagsToIncident(Long userId, Long fromIncidentId, Long toIncidentId,
                                       List<Long> messageIds) {
-        if (userId == null || fromEventId == null || toEventId == null
+        if (userId == null || fromIncidentId == null || toIncidentId == null
                 || messageIds == null || messageIds.isEmpty()) {
             return 0;
         }
         return tagRecordMapper.update(null, Wrappers.<TagRecord>lambdaUpdate()
-                .set(TagRecord::getEventId, toEventId)
+                .set(TagRecord::getIncidentId, toIncidentId)
                 .eq(TagRecord::getUserId, userId)
-                .eq(TagRecord::getEventId, fromEventId)
+                .eq(TagRecord::getIncidentId, fromIncidentId)
                 .in(TagRecord::getMessageId, messageIds));
     }
 
     /**
-     * 用户纠正解绑（「不是因为这个」类信号）：把指定消息归因到指定事件的情绪/心理行放回挂起队列。
+     * 用户纠正解绑（「不是因为这个」类信号）：把指定消息归因到指定事由的情绪/心理行放回挂起队列。
      * 仅 emotion/psychology 类，intent/task 归因不动。
      */
-    public int unbindEmotionsFromEvent(Long userId, Long eventId, Long messageId) {
-        if (userId == null || eventId == null || messageId == null) {
+    public int unbindEmotionsFromIncident(Long userId, Long incidentId, Long messageId) {
+        if (userId == null || incidentId == null || messageId == null) {
             return 0;
         }
         return tagRecordMapper.update(null, Wrappers.<TagRecord>lambdaUpdate()
-                .set(TagRecord::getEventId, null)
+                .set(TagRecord::getIncidentId, null)
                 .eq(TagRecord::getUserId, userId)
-                .eq(TagRecord::getEventId, eventId)
+                .eq(TagRecord::getIncidentId, incidentId)
                 .eq(TagRecord::getMessageId, messageId)
                 .in(TagRecord::getTagCategory,
                         List.of(TagItem.CATEGORY_EMOTION, TagItem.CATEGORY_PSYCHOLOGY)));

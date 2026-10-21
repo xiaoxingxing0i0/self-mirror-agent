@@ -132,7 +132,7 @@ class LlmGatewayImplTest {
         when(qwenCallSpec.entity(eq(Verdict.class))).thenReturn(new Verdict(true));
 
         Verdict verdict = gateway.callStructured(
-                LlmRequest.of(AgentRole.EVENT, "事件A/B"), Verdict.class);
+                LlmRequest.of(AgentRole.INCIDENT, "事由A/B"), Verdict.class);
 
         assertThat(verdict.same()).isTrue();
     }
@@ -168,7 +168,7 @@ class LlmGatewayImplTest {
         Map<String, LlmProperties.Route> routing = new LinkedHashMap<>();
         routing.put("conversation", route("qwen", "ollama"));
         routing.put("compliance", route("qwen", "none"));
-        routing.put("event", route("qwen", "none"));
+        routing.put("incident", route("qwen", "none"));
         routing.put("language-analysis", route("qwen", "none"));
         routing.put("profile-report", route("qwen", "ollama"));
         routing.put("temp-summarize", route("ollama", "qwen"));

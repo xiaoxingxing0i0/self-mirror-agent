@@ -25,7 +25,7 @@ public class AgentMessage implements Serializable {
         /** 执行结果响应 */
         RESPONSE,
         /** 状态事件（任务进度、生命周期通知） */
-        EVENT,
+        INCIDENT,
         /** 执行异常 */
         ERROR
     }

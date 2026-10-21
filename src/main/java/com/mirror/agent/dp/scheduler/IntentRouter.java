@@ -14,7 +14,7 @@ import com.mirror.agent.message.LanguageAnalysisResult;
 import com.mirror.agent.message.RetrievalItem;
 import com.mirror.agent.message.RetrievalRequest;
 import com.mirror.agent.message.TagItem;
-import com.mirror.agent.service.EventService;
+import com.mirror.agent.service.IncidentService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -49,7 +49,7 @@ public class IntentRouter {
     private final RetrievalAgent retrievalAgent;
     private final TaskExecutionAgent taskExecutionAgent;
     private final AgentInvoker invoker;
-    private final EventService eventService;
+    private final IncidentService incidentService;
     private final AgentProperties agentProperties;
 
     /** 路由结果：对话场景 + 模板变量 + 回复类型 + 关联任务 ID */
@@ -64,7 +64,7 @@ public class IntentRouter {
                     "input", request.getContent(),
                     "summary", analysis.getSummary() == null ? "" : analysis.getSummary(),
                     "history", history,
-                    "recentEvents", eventContext(userId)), "clarify", null);
+                    "recentIncidents", incidentContext(userId)), "clarify", null);
         }
         return switch (analysis.getPrimaryIntent()) {
             case "consult" -> consultRoute(userId, request, analysis, history);
@@ -74,16 +74,16 @@ public class IntentRouter {
         };
     }
 
-    /** 对话 Prompt 的事件背景注入段（用户近期提及的事件，帮助模型了解前因后果） */
-    private String eventContext(Long userId) {
-        if (!agentProperties.isEventPipelineEnabled()) {
+    /** 对话 Prompt 的事由背景注入段（用户近期提及的事由，帮助模型了解前因后果） */
+    private String incidentContext(Long userId) {
+        if (!agentProperties.isIncidentPipelineEnabled()) {
             return "（无）";
         }
         try {
-            String refs = eventService.renderRecentEventRefs(userId);
+            String refs = incidentService.renderRecentIncidentRefs(userId);
             return refs.isBlank() ? "（无）" : refs;
         } catch (Exception e) {
-            log.warn("事件上下文注入失败，按无事件处理: {}", e.getMessage());
+            log.warn("事由上下文注入失败，按无事由处理: {}", e.getMessage());
             return "（无）";
         }
     }
@@ -106,16 +106,16 @@ public class IntentRouter {
         vars.put("retrievalContext", knowledgeContext);
         vars.put("history", history);
         vars.put("input", request.getContent());
-        vars.put("recentEvents", eventContext(userId));
+        vars.put("recentIncidents", incidentContext(userId));
         return new RouteOutcome(Scene.COMFORT, vars, "consult", null);
     }
 
     /**
-     * 历史查询分支：模型指认的已知事件（queryEventIds，归属复验后）→ 事件档案直检（含时间线
-     * 与引用关系网）；叠加个人对话向量检索兜底（列表外更早事件/未指认场景）。
+     * 历史查询分支：模型指认的已知事由（queryIncidentIds，归属复验后）→ 事由档案直检（含时间线
+     * 与引用关系网）；叠加个人对话向量检索兜底（列表外更早事由/未指认场景）。
      */
     private RouteOutcome queryRoute(Long userId, ChatRequest request, LanguageAnalysisResult analysis) {
-        String dossier = eventDossier(userId, analysis);
+        String dossier = incidentDossier(userId, analysis);
         RetrievalRequest retrievalRequest = RetrievalRequest.builder()
                 .userId(userId)
                 .query(request.getContent())
@@ -125,7 +125,7 @@ public class IntentRouter {
                 "retrieve_history", () -> retrievalAgent.retrieve(retrievalRequest));
         StringBuilder info = new StringBuilder();
         if (!dossier.isBlank()) {
-            info.append("【事件档案检索结果（结构化档案，优先采信）】\n").append(dossier).append('\n');
+            info.append("【事由档案检索结果（结构化档案，优先采信）】\n").append(dossier).append('\n');
         }
         if (result.isSuccess() && result.getData() != null && !result.getData().isEmpty()) {
             info.append("【历史对话记录检索】\n围绕「").append(request.getContent())
@@ -139,16 +139,16 @@ public class IntentRouter {
                 Map.of("resultInfo", info.toString()), "query", null);
     }
 
-    /** 事件档案直检：queryEventIds 为空/链路关闭/查询异常 → 空串（回落消息向量检索） */
-    private String eventDossier(Long userId, LanguageAnalysisResult analysis) {
-        if (!agentProperties.isEventPipelineEnabled() || userId == null || analysis == null
-                || analysis.getQueryEventIds() == null || analysis.getQueryEventIds().isEmpty()) {
+    /** 事由档案直检：queryIncidentIds 为空/链路关闭/查询异常 → 空串（回落消息向量检索） */
+    private String incidentDossier(Long userId, LanguageAnalysisResult analysis) {
+        if (!agentProperties.isIncidentPipelineEnabled() || userId == null || analysis == null
+                || analysis.getQueryIncidentIds() == null || analysis.getQueryIncidentIds().isEmpty()) {
             return "";
         }
         try {
-            return eventService.renderEventDossier(userId, analysis.getQueryEventIds());
+            return incidentService.renderIncidentDossier(userId, analysis.getQueryIncidentIds());
         } catch (Exception e) {
-            log.warn("事件档案检索失败，回落对话记录检索: {}", e.getMessage());
+            log.warn("事由档案检索失败，回落对话记录检索: {}", e.getMessage());
             return "";
         }
     }
@@ -190,7 +190,7 @@ public class IntentRouter {
         vars.put("emotionTags", emotionTagText(analysis));
         vars.put("history", history);
         vars.put("input", request.getContent());
-        vars.put("recentEvents", eventContext(userId));
+        vars.put("recentIncidents", incidentContext(userId));
         if (negative) {
             vars.put("retrievalContext", "（本次未检索知识库）");
             return new RouteOutcome(Scene.COMFORT, vars, "chat", null);

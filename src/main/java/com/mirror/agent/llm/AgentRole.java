@@ -12,10 +12,10 @@ public enum AgentRole {
     /** 内容合规审查（ComplianceAgent，安全关键，禁止降级） */
     COMPLIANCE("compliance", "compliance-agent.txt"),
 
-    /** 事件同一性裁决（EventAgent，结构化输出） */
-    EVENT("event", "event-agent.txt"),
+    /** 事由同一性裁决（IncidentAgent，结构化输出） */
+    INCIDENT("incident", "incident-agent.txt"),
 
-    /** 语言分析打标 + 事件抽取（LanguageAnalysisAgent，结构化输出） */
+    /** 语言分析打标 + 事由抽取（LanguageAnalysisAgent，结构化输出） */
     LANGUAGE_ANALYSIS("language-analysis", "language-analysis-agent.txt"),
 
     /** 画像报告撰写（ProfileReportAgent，自由 Markdown） */

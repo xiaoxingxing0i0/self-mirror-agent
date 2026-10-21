@@ -9,8 +9,10 @@ import io.milvus.grpc.SearchResults;
 import io.milvus.param.IndexType;
 import io.milvus.param.MetricType;
 import io.milvus.param.R;
+import io.milvus.grpc.DescribeCollectionResponse;
 import io.milvus.param.collection.CollectionSchemaParam;
 import io.milvus.param.collection.CreateCollectionParam;
+import io.milvus.param.collection.DescribeCollectionParam;
 import io.milvus.param.collection.FieldType;
 import io.milvus.param.collection.HasCollectionParam;
 import io.milvus.param.collection.LoadCollectionParam;
@@ -25,6 +27,7 @@ import io.milvus.grpc.DataType;
 
 import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * Milvus 集合初始化与通用检索支撑（docs/data_model.md §4.3）。
@@ -40,15 +43,18 @@ public class MilvusCollectionSupport {
 
     private final AtomicBoolean messageReady = new AtomicBoolean(false);
     private final AtomicBoolean knowledgeReady = new AtomicBoolean(false);
-    private final AtomicBoolean eventReady = new AtomicBoolean(false);
+    private final AtomicBoolean incidentReady = new AtomicBoolean(false);
     private final AtomicBoolean factReady = new AtomicBoolean(false);
+
+    /** incident_vector 是否含 scene_category 字段（三态：null=未探测；旧版 collection 缺字段时为 false） */
+    private final AtomicReference<Boolean> incidentSceneField = new AtomicReference<>();
 
     @PostConstruct
     public void init() {
         try {
             ensureMessageCollection();
             ensureKnowledgeCollection();
-            ensureEventCollection();
+            ensureIncidentCollection();
             ensureFactCollection();
         } catch (Exception e) {
             log.warn("Milvus 集合初始化失败，将在首次使用时重试: {}", e.getMessage());
@@ -56,8 +62,8 @@ public class MilvusCollectionSupport {
     }
 
     /**
-     * event_fact_vector：主键 fact_id（确定性哈希：hash(eventId, messageId, index)，重试幂等），
-     * 分区键 user_id，冗余 event_id/message_id/content（多路召回按事件取 max 相似度）。
+     * incident_fact_vector：主键 fact_id（确定性哈希：hash(incidentId, messageId, index)，重试幂等），
+     * 分区键 user_id，冗余 incident_id/message_id/content（多路召回按事由取 max 相似度）。
      */
     public void ensureFactCollection() {
         if (factReady.get() || hasCollection(properties.getFactCollection())) {
@@ -66,7 +72,7 @@ public class MilvusCollectionSupport {
         }
         CollectionSchemaParam schema = CollectionSchemaParam.newBuilder()
                 .addFieldType(longField("fact_id", true, false))
-                .addFieldType(longField("event_id", false, false))
+                .addFieldType(longField("incident_id", false, false))
                 .addFieldType(longField("user_id", false, true))
                 .addFieldType(longField("message_id", false, false))
                 .addFieldType(longField("create_time", false, false))
@@ -78,22 +84,60 @@ public class MilvusCollectionSupport {
         log.info("Milvus 集合已创建: {}", properties.getFactCollection());
     }
 
-    /** event_vector：主键 event_id，分区键 user_id，冗余摘要与活跃时间（查重 rerank 用） */
-    public void ensureEventCollection() {
-        if (eventReady.get() || hasCollection(properties.getEventCollection())) {
-            eventReady.set(true);
+    /** incident_vector：主键 incident_id，分区键 user_id，冗余摘要/活跃时间（查重 rerank 用）与场景分类 */
+    public void ensureIncidentCollection() {
+        if (incidentReady.get()) {
+            return;
+        }
+        if (hasCollection(properties.getIncidentCollection())) {
+            // 旧版 schema 无法在线加字段（Milvus 2.4 无 schema evolution），只探测不改动
+            checkIncidentSceneFieldOnce();
+            incidentReady.set(true);
             return;
         }
         CollectionSchemaParam schema = CollectionSchemaParam.newBuilder()
-                .addFieldType(longField("event_id", true, false))
+                .addFieldType(longField("incident_id", true, false))
                 .addFieldType(longField("user_id", false, true))
                 .addFieldType(longField("last_active_time", false, false))
+                .addFieldType(varCharField("scene_category", false))
                 .addFieldType(contentField())
                 .addFieldType(vectorField())
                 .build();
-        createAndLoad(properties.getEventCollection(), schema);
-        eventReady.set(true);
-        log.info("Milvus 集合已创建: {}", properties.getEventCollection());
+        createAndLoad(properties.getIncidentCollection(), schema);
+        incidentSceneField.set(Boolean.TRUE);
+        incidentReady.set(true);
+        log.info("Milvus 集合已创建: {}", properties.getIncidentCollection());
+    }
+
+    /**
+     * incident_vector 集合是否支持 scene_category 字段（写入端据此决定是否携带该字段，
+     * 保证旧 schema 环境下摘要向量主链路不因整行 upsert 报错而丢失）。
+     */
+    public boolean incidentSupportsScene() {
+        return Boolean.TRUE.equals(incidentSceneField.get());
+    }
+
+    private void checkIncidentSceneFieldOnce() {
+        if (incidentSceneField.get() != null) {
+            return;
+        }
+        try {
+            R<DescribeCollectionResponse> desc = client.describeCollection(
+                    DescribeCollectionParam.newBuilder()
+                            .withCollectionName(properties.getIncidentCollection()).build());
+            if (desc.getStatus() != R.Status.Success.getCode()) {
+                return; // 探测失败留待下次访问重试，不误判
+            }
+            boolean has = desc.getData().getSchema().getFieldsList().stream()
+                    .anyMatch(f -> "scene_category".equals(f.getName()));
+            incidentSceneField.set(has);
+            if (!has) {
+                log.warn("incident_vector 为旧版 schema（缺 scene_category 字段）："
+                        + "场景分类仅落 MySQL，向量侧跳过。需 drop 并重建该集合以启用（向量可由 MySQL 离线补建）");
+            }
+        } catch (Exception e) {
+            log.warn("incident_vector schema 探测失败（下次访问重试）: {}", e.getMessage());
+        }
     }
 
     /** message_vector：主键 message_id，分区键 user_id */

@@ -28,7 +28,7 @@ import java.util.List;
  * 碎片归集协调器（话未说完→等待续说→超时主动追问），对话链路的实际编排者。
  * 完整性判定：高置信规则为「明显碎片快速通道」，其余由 analyze 的 fragment 字段全量判定（零额外调用）；
  * 滑动窗口 + Redis ZSET 定时器（ZREM 认领多实例互斥）；追问先落库再 SSE 投递，离线重开拉历史兜底；
- * 归集关闭时退化为标准链路直通。事件链路完成后异步交 {@link EventResolver} 处理。
+ * 归集关闭时退化为标准链路直通。事由链路完成后异步交 {@link IncidentResolver} 处理。
  */
 @Slf4j
 @Component
@@ -43,7 +43,7 @@ public class AggregationCoordinator {
     private final ConversationService conversationService;
     private final IntentRouter intentRouter;
     private final ChatPushService pushService;
-    private final EventResolver eventResolver;
+    private final IncidentResolver incidentResolver;
 
     // ==================== 同步对话入口 ====================
 
@@ -77,7 +77,7 @@ public class AggregationCoordinator {
         }
         ChatResponse response = executeTurn(conversation, userId, request.getContent(),
                 List.of(userMessage.getId()), analysis, context);
-        eventResolver.resolveAsync(userId, conversation.getId(),
+        incidentResolver.resolveAsync(userId, conversation.getId(),
                 List.of(userMessage.getId()), request.getContent(), analysis);
         return response;
     }
@@ -110,7 +110,7 @@ public class AggregationCoordinator {
         ChatResponse response = executeTurn(conversation, userId, merged,
                 messageIds(fragments), analysis, context);
         if (!forcedClarify) {
-            eventResolver.resolveAsync(userId, conversation.getId(),
+            incidentResolver.resolveAsync(userId, conversation.getId(),
                     messageIds(fragments), merged, analysis);
         }
         return response;
@@ -146,7 +146,7 @@ public class AggregationCoordinator {
             bufferFreshFragment(conversation, userId, userMessage);
             return StreamPreparation.pending(conversation);
         }
-        eventResolver.resolveAsync(userId, conversation.getId(),
+        incidentResolver.resolveAsync(userId, conversation.getId(),
                 List.of(userMessage.getId()), request.getContent(), analysis);
         return routedPreparation(conversation, context, analysis, request.getContent(),
                 userMessage, null, null);
@@ -180,7 +180,7 @@ public class AggregationCoordinator {
             analysis.setNeedClarify(true);
         }
         if (!forcedClarify) {
-            eventResolver.resolveAsync(userId, conversation.getId(),
+            incidentResolver.resolveAsync(userId, conversation.getId(),
                     messageIds(fragments), merged, analysis);
         }
         return routedPreparation(conversation, context, analysis, merged,

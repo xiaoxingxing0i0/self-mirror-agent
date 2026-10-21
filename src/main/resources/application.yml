@@ -110,7 +110,7 @@ mirror:
     routing:
       conversation:      { provider: qwen,   fallback: ollama }  # 面向用户，可用性优先
       compliance:        { provider: qwen,   fallback: none }    # 安全关键链路，禁止降级到本地小模型
-      event:             { provider: qwen,   fallback: none }    # 结构化输出，7b 模型 JSON 稳定性不足
+      incident:             { provider: qwen,   fallback: none }    # 结构化输出，7b 模型 JSON 稳定性不足
       language-analysis: { provider: qwen,   fallback: none }    # 同上
       profile-report:    { provider: qwen,   fallback: ollama }  # 自由文本，可降级
       temp-summarize:    { provider: ollama, fallback: qwen }    # 重 token 轻质量，优先本地省成本
@@ -121,8 +121,8 @@ mirror:
     password: ${MILVUS_PASSWORD:Milvus}     # 留空 = 匿名连接（未开启认证的实例）
     message-collection: message_vector
     knowledge-collection: knowledge_vector
-    event-collection: event_vector
-    fact-collection: event_fact_vector
+    incident-collection: incident_vector
+    fact-collection: incident_fact_vector
     embedding-dim: ${MILVUS_EMBEDDING_DIM:1024}
   agent:
     context-max-rounds: 8          # 对话上下文截取最近 N 轮
@@ -133,14 +133,14 @@ mirror:
     fragment-window-seconds: 60             # 滑动归集窗口（秒）：每收到新碎片重置截止时间
     fragment-max-total-wait-seconds: 180    # 单轮归集总等待上限（秒），超过立即合并并强制澄清
     fragment-max-fragments: 5               # 单轮最多合并碎片数
-    event-pipeline-enabled: true            # 情绪-事件关联链路总开关
-    event-dedup-high-score: 0.92            # 查重高置信阈值（≥ 直接归并既有事件）
-    event-dedup-low-score: 0.80             # 查重低置信阈值（之间走 LLM 裁决）
-    event-time-decay-tau-days: 7            # rerank 时间衰减常数 τ（天）
-    event-episode-gap-minutes: 30           # 超过该间隔再提及算「重提」
-    event-finalize-minutes: 20              # EMERGING 事件静默该时长后定稿
-    event-context-count: 3                  # 上下文注入最近提及事件个数
-    event-search-topk: 5                    # 事件查重向量检索 TopK
+    incident-pipeline-enabled: true            # 情绪-事由关联链路总开关
+    incident-dedup-high-score: 0.92            # 查重高置信阈值（≥ 直接归并既有事由）
+    incident-dedup-low-score: 0.80             # 查重低置信阈值（之间走 LLM 裁决）
+    incident-time-decay-tau-days: 7            # rerank 时间衰减常数 τ（天）
+    incident-episode-gap-minutes: 30           # 超过该间隔再提及算「重提」
+    incident-finalize-minutes: 20              # EMERGING 事由静默该时长后定稿
+    incident-context-count: 3                  # 上下文注入最近提及事由个数
+    incident-search-topk: 5                    # 事由查重向量检索 TopK
   compliance:
     word-dict-path: classpath:compliance/sensitive-words.txt
     risk-log-enabled: true
