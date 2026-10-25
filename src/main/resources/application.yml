@@ -10,9 +10,9 @@ spring:
 
   datasource:
     driver-class-name: com.mysql.cj.jdbc.Driver
-    url: jdbc:mysql://${MYSQL_HOST:localhost}:${MYSQL_PORT:3306}/self_mirror_agent?useUnicode=true&characterEncoding=UTF-8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true
-    username: ${MYSQL_USER:root}
-    password: ${MYSQL_PASSWORD:xu123456}
+    url: jdbc:mysql://${MYSQL_HOST}:${MYSQL_PORT}/self_mirror_agent?useUnicode=true&characterEncoding=UTF-8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true
+    username: ${MYSQL_USER}
+    password: ${MYSQL_PASSWORD}
     hikari:
       maximum-pool-size: 16
       minimum-idle: 4
@@ -24,8 +24,8 @@ spring:
 
   data:
     redis:
-      host: ${REDIS_HOST:localhost}
-      port: ${REDIS_PORT:6379}
+      host: ${REDIS_HOST}
+      port: ${REDIS_PORT}
       database: 0
       timeout: 3s
       lettuce:
@@ -49,10 +49,10 @@ spring:
     openai:
       # 对接阿里云百炼（通义千问）OpenAI 兼容模式；api-key 只从环境变量注入，不设默认值
       api-key: ${AI_API_KEY}
-      base-url: ${AI_BASE_URL:https://dashscope.aliyuncs.com/compatible-mode}
+      base-url: ${AI_BASE_URL}
       embedding:
         options:
-          model: ${AI_EMBEDDING_MODEL:qwen3.7-text-embedding}
+          model: ${AI_EMBEDDING_MODEL}
 
   jackson:
     default-property-inclusion: non_null
@@ -95,16 +95,16 @@ mirror:
     # 云端：通义千问（DashScope OpenAI 兼容模式）
     qwen:
       api-key: ${AI_API_KEY}
-      base-url: ${AI_BASE_URL:https://dashscope.aliyuncs.com/compatible-mode}
-      model: ${AI_CHAT_MODEL:qwen-plus}
+      base-url: ${AI_BASE_URL}
+      model: ${AI_CHAT_MODEL}
       temperature: 0.7
     # 本地：Ollama（原生 API）
     ollama:
-      base-url: ${OLLAMA_BASE_URL:http://localhost:11434}
-      model: ${OLLAMA_MODEL:qwen2.5:7b}
+      base-url: ${OLLAMA_BASE_URL}
+      model: ${OLLAMA_MODEL}
       temperature: 0.7
     # 模型出入参日志（ModelIoLoggingAdvisor）：请求文本/回复文本/耗时/token 用量；生产可关
-    io-log-enabled: ${LLM_IO_LOG_ENABLED:true}
+    io-log-enabled: ${LLM_IO_LOG_ENABLED}
     io-log-max-chars: 4000          # 单条文本截断上限（字符），≤0 = 不截断
     # 角色 → 主 provider + 降级 provider（none = 不降级）
     routing:
@@ -115,15 +115,15 @@ mirror:
       profile-report:    { provider: qwen,   fallback: ollama }  # 自由文本，可降级
       temp-summarize:    { provider: ollama, fallback: qwen }    # 重 token 轻质量，优先本地省成本
   milvus:
-    host: ${MILVUS_HOST:localhost}
-    port: ${MILVUS_PORT:19530}
-    username: ${MILVUS_USERNAME:root}
-    password: ${MILVUS_PASSWORD:Milvus}     # 留空 = 匿名连接（未开启认证的实例）
+    host: ${MILVUS_HOST}
+    port: ${MILVUS_PORT}
+    username: ${MILVUS_USERNAME}
+    password: ${MILVUS_PASSWORD}     # 留空 = 匿名连接（未开启认证的实例）
     message-collection: message_vector
     knowledge-collection: knowledge_vector
     incident-collection: incident_vector
     fact-collection: incident_fact_vector
-    embedding-dim: ${MILVUS_EMBEDDING_DIM:1024}
+    embedding-dim: ${MILVUS_EMBEDDING_DIM}
   agent:
     context-max-rounds: 8          # 对话上下文截取最近 N 轮
     low-confidence-threshold: 0.7  # 低于该置信度的标签标记为待确认
@@ -141,6 +141,9 @@ mirror:
     incident-finalize-minutes: 20              # EMERGING 事由静默该时长后定稿
     incident-context-count: 3                  # 上下文注入最近提及事由个数
     incident-search-topk: 5                    # 事由查重向量检索 TopK
+    report-period-clarify-enabled: true        # 报告周期澄清：custom/statistic 未明示区间时反问一轮
+    report-period-clarify-ttl-minutes: 10      # 澄清待办槽 TTL（分钟），超时后用户再答按新话题处理
+    report-max-span-days: 90                   # 日历类锚点最大统计跨度（天），超出截断；事由锚豁免
   compliance:
     word-dict-path: classpath:compliance/sensitive-words.txt
     risk-log-enabled: true

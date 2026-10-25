@@ -17,6 +17,7 @@
  "primaryIntent":"chat|consult|query|task 之一",
  "needClarify":false,"fragment":false,
  "queryIncidentIds":[],
+ "periodHint":{"type":null,"year":null,"month":null,"day":null,"start":null,"end":null,"n":null,"incidentRef":null,"explicit":false},
  "incidents":[{"name":"≤25字","coreFacts":{"time":"","participants":[],"topic":""},
    "incidentAction":"NEW|CONTINUE|AMBIGUOUS","refIncidentId":null,
    "facts":["≤50字的增量原子事实"],
@@ -30,6 +31,7 @@
 4. 同一性与增量事实：与【最近提及事由】时段+参与者+主题一致→incidentAction=CONTINUE、refIncidentId=该 #id（隔了一段时间再提同一件事也 CONTINUE，无需区分首次延续与重提）。参与者/公司/对象不同则同类也算不同事由→NEW（如 #801 面试失败后说「今天面了另一家」→NEW；「面试结果出了，我被拒了」→CONTINUE+refIncidentId=801）。**看似同一件事但证据不足→incidentAction=AMBIGUOUS+refIncidentId=该 #id（先归入草稿，后端封稿时复核，可拆分）**，不再默认新建。facts 只写【本条消息新增】的原子事实（1~3 条、每条≤50 字，含时间/人物/结果要素），**严禁合并旧信息重写摘要**；归入进行中的事由时以其「最近事实」为对照面，已记录的信息（即使换了措辞）不得重复输出；NEW 事由写本次叙述的事情现状。
 5. referencedIncidents：本条消息提到了【另一个旧事由】（主线是别的事）才建引用，拿不准是否同一件事不要放这里：comparison=新旧对比（「比上次好」）| causal=新事由归因于旧事由（「因为上次面试所以我紧张」）| mention=单纯提及无强关联。refIncidentId 只准用【最近提及事由】中的真实 #id；同一件事的后续进展属于 CONTINUE，禁止放这里；无引用→"referencedIncidents":[]。
 6. queryIncidentIds：当用户在**询问/回看已知事由**（多见于 query，如「之前那次面试后来怎样了」「我和室友那件事后来怎么样了」）→ 列出【最近提及事由】中对应事由的 #id（可多个）；只准用列表中真实出现的 id，禁止编造；所指事由不在列表或问题与已知事由无关→填 []。本字段只用于查询定位，与 incidents 的事由抽取相互独立。
+7. periodHint（报告周期锚点）：用户**明示**了统计时间范围才填（type 取下列枚举），**严禁自行推断周期**；未明示→整个字段置 null（或仅 explicit=false）。纯报告名词（日报/周报/月报）本身**不算**明示时间。type 取值：TODAY 今天 | YESTERDAY 昨天 | THIS_WEEK 本周 | LAST_WEEK 上周 | THIS_MONTH 本月 | LAST_MONTH 上月 | LAST_N_DAYS 近n天（n 填 n 字段）| ABS_DATE 某个具体日子（year/month/day，用户没说年份则 year=null）| ABS_MONTH 某个月（同上）| ABS_RANGE 区间（start/end **照抄**用户字面日期为 YYYY-MM-DD，不做任何换算或补全年份之外的推理）| INCIDENT 围绕【最近提及事由】中的某件事（incidentRef 必须用列表内真实 #id，不在列表→不得用本类型）| LAST_REPORT_END 从上次报告到现在 | ALL_TIME 从有记录到现在。与 needClarify 相互独立：「上周」这类短回复即使输入过短，只要它限定了范围就照填。
 
 ## 示例C（中立的功能提问：零情绪标签，intent=chat 而非心理咨询）
 输入：「你有什么作用」

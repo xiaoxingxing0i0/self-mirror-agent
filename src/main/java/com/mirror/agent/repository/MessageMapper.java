@@ -38,6 +38,13 @@ public interface MessageMapper extends BaseMapper<Message> {
                            @Param("start") LocalDateTime start,
                            @Param("end") LocalDateTime end);
 
+    /** 用户最早一条消息时间（ALL_TIME 全量锚定界依据；无记录返回 null） */
+    @Select("""
+            SELECT MIN(create_time) FROM message
+            WHERE user_id = #{userId} AND role = 0 AND is_deleted = 0
+            """)
+    LocalDateTime firstUserMessageTime(@Param("userId") Long userId);
+
     /** 活跃时段统计投影 */
     @Data
     class HourStat {

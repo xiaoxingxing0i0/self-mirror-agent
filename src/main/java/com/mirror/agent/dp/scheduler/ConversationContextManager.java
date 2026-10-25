@@ -2,11 +2,13 @@ package com.mirror.agent.dp.scheduler;
 
 import com.mirror.agent.config.AgentProperties;
 import com.mirror.agent.dp.entity.ConversationContext;
+import com.mirror.agent.message.PendingPeriod;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Component;
 
+import java.time.Duration;
 import java.time.LocalDateTime;
 
 /**
@@ -28,6 +30,7 @@ public class ConversationContextManager {
 
     private static final String KEY_PREFIX = "mirror:ctx:";
     private static final String SNAPSHOT_PREFIX = "mirror:ctx:snap:";
+    private static final String PENDING_PERIOD_PREFIX = "mirror:pending:period:";
 
     private final RedisTemplate<String, Object> redisTemplate;
     private final AgentProperties agentProperties;
@@ -66,10 +69,35 @@ public class ConversationContextManager {
         return load(conversationId, userId);
     }
 
-    /** 主动清除某用户某会话的短期记忆（上下文 + 快照） */
+    /** 主动清除某用户某会话的短期记忆（上下文 + 快照 + 周期澄清待办槽） */
     public void evict(Long userId, Long conversationId) {
         redisTemplate.delete(contextKey(userId, conversationId));
         redisTemplate.delete(snapshotKey(userId, conversationId));
+        redisTemplate.delete(pendingPeriodKey(userId, conversationId));
+    }
+
+    // ==================== 报告周期澄清待办槽（TTL 短键，与会话上下文同维度） ====================
+
+    /** 挂起周期澄清（TTL 分钟级，到点自动失效；同会话重复挂起直接覆盖，保证槽唯一） */
+    public void putPendingPeriod(Long userId, Long conversationId, PendingPeriod slot) {
+        redisTemplate.opsForValue().set(pendingPeriodKey(userId, conversationId), slot,
+                Duration.ofMinutes(agentProperties.getReportPeriodClarifyTtlMinutes()));
+    }
+
+    /** 读取待办槽，无则 null（消费方负责删除，见 IntentRouter.pendingPeriodGuard） */
+    public PendingPeriod loadPendingPeriod(Long userId, Long conversationId) {
+        Object cached = redisTemplate.opsForValue().get(pendingPeriodKey(userId, conversationId));
+        return cached instanceof PendingPeriod slot ? slot : null;
+    }
+
+    /** 消费/丢弃待办槽 */
+    public void clearPendingPeriod(Long userId, Long conversationId) {
+        redisTemplate.delete(pendingPeriodKey(userId, conversationId));
+    }
+
+    /** 待办槽键：与上下文键同维度（用户ID+会话ID），会话间隔离 */
+    private String pendingPeriodKey(Long userId, Long conversationId) {
+        return PENDING_PERIOD_PREFIX + userId + ":" + conversationId;
     }
 
     /** 上下文键：用户ID + 会话ID 双维度，会话间隔离存储 */

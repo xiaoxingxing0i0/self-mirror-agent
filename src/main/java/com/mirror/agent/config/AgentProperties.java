@@ -69,4 +69,13 @@ public class AgentProperties {
 
     /** 情绪挂起队列窗口（分钟）：事由落库时仅归因该时间窗内未关联事由的情绪/心理标签 */
     private int emotionPendingWindowMinutes = 15;
+
+    /** 报告周期澄清开关：custom/statistic 且用户未明示区间时反问一轮（关闭则直接按默认窗口建任务） */
+    private boolean reportPeriodClarifyEnabled = true;
+
+    /** 周期澄清待办槽 TTL（分钟）：超时后用户再答按新话题处理 */
+    private int reportPeriodClarifyTtlMinutes = 10;
+
+    /** 日历类锚点最大统计跨度（天）：超出截断 start；事由锚（INCIDENT）不受此限 */
+    private int reportMaxSpanDays = 90;
 }

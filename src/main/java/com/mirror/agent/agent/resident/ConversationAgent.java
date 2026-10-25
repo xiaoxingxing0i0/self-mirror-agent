@@ -29,6 +29,7 @@ public class ConversationAgent {
         DAILY("chat-daily.txt"),
         COMFORT("chat-comfort.txt"),
         CLARIFY("chat-clarify.txt"),
+        PERIOD_CLARIFY("report-period-clarify.txt"),
         TASK_NOTIFY("task-notify.txt"),
         RESULT_NOTIFY("result-notify.txt");
 

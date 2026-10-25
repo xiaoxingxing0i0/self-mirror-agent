@@ -36,6 +36,42 @@ public class LanguageAnalysisResult implements Serializable {
      */
     private List<Long> queryIncidentIds = new ArrayList<>();
 
+    /** 报告周期锚点（仅任务分支消费；用户未提时间→null 或 explicit=false，解析与日历运算收敛于 ReportPeriodResolver） */
+    private PeriodHint periodHint;
+
+    /**
+     * 报告周期锚点描述——模型只做「分类 + 照抄字面日期」，不做任何日历推算；
+     * type→区间的换算、钳制与降级全部在 ReportPeriodResolver（确定性层）。
+     */
+    @Data
+    public static class PeriodHint implements Serializable {
+
+        /**
+         * 锚点类型：TODAY | YESTERDAY | THIS_WEEK | LAST_WEEK | THIS_MONTH | LAST_MONTH |
+         * LAST_N_DAYS | ABS_DATE | ABS_MONTH | ABS_RANGE | INCIDENT | LAST_REPORT_END | ALL_TIME；
+         * 未知值由 resolver 归入默认窗口降级。
+         */
+        private String type;
+
+        /** ABS_MONTH / ABS_DATE：用户明示的年月日；未说年份→year=null 由 resolver 按「未到→取去年」补 */
+        private Integer year;
+        private Integer month;
+        private Integer day;
+
+        /** ABS_RANGE：照抄用户原话的字面日期（YYYY-MM-DD），严禁模型换算 */
+        private String start;
+        private String end;
+
+        /** LAST_N_DAYS：近 n 天 */
+        private Integer n;
+
+        /** INCIDENT：围绕【最近提及事由】中某件事建报告时的真实 #id（列表外 id 由归属复验拦截） */
+        private Long incidentRef;
+
+        /** 用户是否明示了时间范围；false/缺失=没说，其余字段必须为空，由调用方走默认窗口或澄清 */
+        private Boolean explicit;
+    }
+
     public List<TagItem> tagsOf(String category) {
         return tags.stream().filter(t -> category.equals(t.getCategory())).toList();
     }

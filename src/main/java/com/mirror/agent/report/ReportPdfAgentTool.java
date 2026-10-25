@@ -38,7 +38,7 @@ public class ReportPdfAgentTool {
 
     private static final String CONTRACT_DESCRIPTION = """
             报告契约 JSON 字符串。必填字段：reportId(非空字符串)、title(非空字符串)、\
-            generatedAt(ISO8601 且必须带时区，如 2026-10-21T10:00:00+08:00)；\
+            generatedAt(yyyy-MM-dd格式 不带时区，如 2026-10-21 10:00:00)；\
             可选字段：summary(字符串或 null)、sections(数组或 null，每项含 heading 必填字符串 + \
             rows 数组，每行含 label 必填、value 字符串或 null、status 仅允许 OK|WARN|CRITICAL|null)。\
             不允许出现未定义的其它字段。""";

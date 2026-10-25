@@ -3,14 +3,13 @@ package com.mirror.agent.dp.scheduler;
 import com.mirror.agent.agent.resident.ConversationAgent;
 import com.mirror.agent.agent.resident.ConversationAgent.Scene;
 import com.mirror.agent.agent.resident.RetrievalAgent;
-import com.mirror.agent.agent.resident.TaskExecutionAgent;
 import com.mirror.agent.config.AgentProperties;
 import com.mirror.agent.dp.entity.ConversationContext;
-import com.mirror.agent.entity.Task;
 import com.mirror.agent.message.AgentResult;
 import com.mirror.agent.message.AgentType;
 import com.mirror.agent.message.ChatRequest;
 import com.mirror.agent.message.LanguageAnalysisResult;
+import com.mirror.agent.message.PendingPeriod;
 import com.mirror.agent.message.RetrievalItem;
 import com.mirror.agent.message.RetrievalRequest;
 import com.mirror.agent.message.TagItem;
@@ -20,10 +19,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
 import java.time.LocalDate;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 import java.util.stream.Collectors;
 
 /**
@@ -47,10 +43,12 @@ public class IntentRouter {
             "statistic", "statistic");
 
     private final RetrievalAgent retrievalAgent;
-    private final TaskExecutionAgent taskExecutionAgent;
     private final AgentInvoker invoker;
     private final IncidentService incidentService;
     private final AgentProperties agentProperties;
+    private final ConversationContextManager contextManager;
+    private final ReportPeriodResolver periodResolver;
+    private final ReportTaskLauncher reportTaskLauncher;
 
     /** 路由结果：对话场景 + 模板变量 + 回复类型 + 关联任务 ID */
     public record RouteOutcome(Scene scene, Map<String, String> vars, String replyType, Long taskId) {
@@ -59,6 +57,10 @@ public class IntentRouter {
     public RouteOutcome route(Long userId, ConversationContext context,
                               ChatRequest request, LanguageAnalysisResult analysis) {
         String history = context.renderHistory();
+        RouteOutcome fromSlot = pendingPeriodGuard(userId, request, analysis);
+        if (fromSlot != null) {
+            return fromSlot;
+        }
         if (analysis.isNeedClarify()) {
             return new RouteOutcome(Scene.CLARIFY, Map.of(
                     "input", request.getContent(),
@@ -153,32 +155,54 @@ public class IntentRouter {
         }
     }
 
-    /** 任务分支：创建报告/统计任务 → 任务通知（scene.md 场景 3） */
+    /**
+     * 任务分支：创建报告/统计任务 → 任务通知（scene.md 场景 3）。
+     * 周期决策：明示锚点（periodHint）优先 → custom/statistic 未明示则挂澄清槽反问一轮
+     * （一次对话至多一轮反问，澄清答案即确认，不再叠加独立二次确认轮）→
+     * 日报/周报/月报名词自带周期，直接按默认窗口建任务；区间换算与降级见 {@link ReportPeriodResolver}。
+     */
     private RouteOutcome taskRoute(Long userId, ChatRequest request, LanguageAnalysisResult analysis) {
         String tagCode = analysis.firstTagCode(TagItem.CATEGORY_TASK);
         String reportType = TASK_TAG_TO_REPORT_TYPE.getOrDefault(tagCode, "weekly");
-        LocalDate end = LocalDate.now();
-        LocalDate start = switch (reportType) {
-            case "daily" -> end;
-            case "monthly" -> end.minusDays(29);
-            default -> end.minusDays(6);
-        };
-        String taskType = "statistic".equals(reportType) ? Task.TYPE_STATISTIC : Task.TYPE_REPORT;
-        Map<String, Object> params = Map.of(
-                "reportType", reportType,
-                "startDate", start.toString(),
-                "endDate", end.toString());
-        AgentResult<Task> result = invoker.invoke(AgentType.TASK_EXECUTION, "create_task",
-                () -> taskExecutionAgent.createTask(userId, taskType,
-                        "生成" + reportTypeName(reportType), params, null));
-        String taskInfo = result.isSuccess() && result.getData() != null
-                ? "任务已创建并开始执行：名称=" + result.getData().getTaskName()
-                        + "，统计周期=" + start + " 至 " + end
-                        + "，任务ID=" + result.getData().getId() + "，完成后会向您推送结果。"
-                : "任务创建失败：" + result.getErrorMessage() + "，请安抚用户并建议稍后重试。";
-        Long taskId = result.isSuccess() && result.getData() != null ? result.getData().getId() : null;
-        return new RouteOutcome(Scene.TASK_NOTIFY,
-                Map.of("taskInfo", taskInfo, "input", request.getContent()), "task_notify", taskId);
+        LanguageAnalysisResult.PeriodHint hint = analysis.getPeriodHint();
+        boolean explicitPeriod = hint != null && Boolean.TRUE.equals(hint.getExplicit());
+        boolean periodNeeded = "custom".equals(reportType) || "statistic".equals(reportType);
+        if (!explicitPeriod && periodNeeded && agentProperties.isReportPeriodClarifyEnabled()
+                && request.getConversationId() != null) {
+            contextManager.putPendingPeriod(userId, request.getConversationId(),
+                    PendingPeriod.of(userId, request.getConversationId(), reportType));
+            return new RouteOutcome(Scene.PERIOD_CLARIFY, Map.of(
+                    "reportTypeName", reportTaskLauncher.reportTypeName(reportType),
+                    "defaultRange", periodResolver.defaultRangeText(reportType, LocalDate.now()),
+                    "input", request.getContent()), "period_clarify", null);
+        }
+        return reportTaskLauncher.launch(userId, request, reportType,
+                explicitPeriod ? hint : null, LocalDate.now());
+    }
+
+    /**
+     * 周期澄清待办槽守卫（须先于 needClarify 分支执行——「上周」这类短回复会被常规判定误导向澄清）：
+     * 槽存在即消费——本轮解析出明示周期→按挂起类型建任务；「随便/都行」→默认周期建任务；
+     * 都解析不出（拒绝/换话题）→ 槽已清除，回落正常路由。TTL 到点自动失效。
+     */
+    private RouteOutcome pendingPeriodGuard(Long userId, ChatRequest request,
+                                            LanguageAnalysisResult analysis) {
+        Long conversationId = request.getConversationId();
+        if (conversationId == null) {
+            return null;
+        }
+        PendingPeriod slot = contextManager.loadPendingPeriod(userId, conversationId);
+        if (slot == null) {
+            return null;
+        }
+        contextManager.clearPendingPeriod(userId, conversationId);
+        LanguageAnalysisResult.PeriodHint hint = analysis == null ? null : analysis.getPeriodHint();
+        boolean hasRange = hint != null && Boolean.TRUE.equals(hint.getExplicit());
+        if (!hasRange && !periodResolver.isDefaultAccept(request.getContent())) {
+            return null;
+        }
+        return reportTaskLauncher.launch(userId, request, slot.getReportType(),
+                hasRange ? hint : null, LocalDate.now());
     }
 
     /** 闲聊/情绪分支：负面情绪走安抚模板，否则日常闲聊模板（串行模式） */
@@ -213,16 +237,6 @@ public class IntentRouter {
                 .map(tag -> tag.getName() + "(" + String.format("%.2f", tag.getConfidence()) + ")")
                 .collect(Collectors.joining("、"));
         return text.isEmpty() ? "（无明显情绪倾向）" : text;
-    }
-
-    private String reportTypeName(String reportType) {
-        return switch (reportType) {
-            case "daily" -> "日报";
-            case "monthly" -> "月报";
-            case "statistic" -> "数据统计";
-            case "custom" -> "自定义报告";
-            default -> "周报";
-        };
     }
 
     private String safe(String value) {
